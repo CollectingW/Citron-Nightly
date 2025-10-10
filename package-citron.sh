@@ -1,14 +1,13 @@
 #!/bin/sh
 set -ex
 ARCH="${ARCH:-$(uname -m)}"
-# Use the ARCH_SUFFIX environment variable passed from the workflow. Default to empty if not set.
-ARCH="${ARCH}${ARCH_SUFFIX:-}"
+
+ARCH="${ARCH}${ARCH_SUFFIX}"
 
 VERSION="$(cat ~/version)"
 URUNTIME="https://raw.githubusercontent.com/pkgforge-dev/Anylinux-AppImages/refs/heads/main/useful-tools/uruntime2appimage.sh"
 SHARUN="https://raw.githubusercontent.com/pkgforge-dev/Anylinux-AppImages/refs/heads/main/useful-tools/quick-sharun.sh"
 
-# Define output names for both formats. The $ARCH variable will now be "x86_64" or "x86_64_v3"
 export OUTNAME_APPIMAGE=Citron-"$VERSION"-anylinux-"$ARCH".AppImage
 export OUTNAME_TAR=Citron-"$VERSION"-anylinux-"$ARCH".tar.zst
 export DESKTOP=/usr/share/applications/org.citron_emu.citron.desktop
@@ -24,17 +23,14 @@ chmod +x ./quick-sharun
 
 echo "Copying Qt translation files..."
 
-# Create the destination directory for translations
 mkdir -p ./AppDir/usr/share/qt6
 
-# Copy the translations directory (which exists now) to its correct path
 cp -r /usr/share/qt6/translations ./AppDir/usr/share/qt6/
 
 if [ "$DEVEL" = 'true' ]; then
 	sed -i 's|Name=citron|Name=citron nightly|' ./AppDir/*.desktop
 fi
 
-# Always allow the system's Vulkan driver to be used, regardless of architecture.
 echo 'SHARUN_ALLOW_SYS_VK_ICD=1' > ./AppDir/.env
 
 
