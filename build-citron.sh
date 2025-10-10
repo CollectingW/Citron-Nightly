@@ -2,11 +2,12 @@
 set -ex
 ARCH="${ARCH:-$(uname -m)}"
 if [ "$1" = 'v3' ] && [ "$ARCH" = 'x86_64' ]; then
-	ARCH_FLAGS="-march=x86-64-v3 -O3 -USuccess -UNone"
+	# Use -fuse-ld=lld for faster linking
+	ARCH_FLAGS="-march=x86-64-v3 -O3 -USuccess -UNone -fuse-ld=lld"
 elif [ "$ARCH" = 'x86_64' ]; then
-	ARCH_FLAGS="-march=x86-64 -mtune=generic -O3 -USuccess -UNone"
+	ARCH_FLAGS="-march=x86-64 -mtune=generic -O3 -USuccess -UNone -fuse-ld=lld"
 else
-	ARCH_FLAGS="-march=armv8-a -mtune=generic -O3 -USuccess -UNone"
+	ARCH_FLAGS="-march=armv8-a -mtune=generic -O3 -USuccess -UNone -fuse-ld=lld"
 fi
 git clone --recursive "https://git.citron-emu.org/citron/emulator.git" ./citron
 cd ./citron
@@ -18,7 +19,7 @@ else
 	git checkout "$CITRON_TAG"
 	VERSION="$(echo "$CITRON_TAG" | awk -F'-' '{print $1}')"
 fi
-# Apply compatibility patches for newer Boost versions found in the Arch container
+
 find . -type f \( -name '*.cpp' -o -name '*.h' \) | xargs sed -i 's/\bboost::asio::io_service\b/boost::asio::io_context/g'
 find . -type f \( -name '*.cpp' -o -name '*.h' \) | xargs sed -i 's/\bboost::asio::io_service::strand\b/boost::asio::strand<boost::asio::io_context::executor_type>/g'
 find . -type f \( -name '*.cpp' -o -name '*.h' \) | xargs sed -i 's|#include *<boost/process/async_pipe.hpp>|#include <boost/process/v1/async_pipe.hpp>|g'
@@ -27,7 +28,10 @@ sed -i '/sse2neon/d' ./src/video_core/CMakeLists.txt
 sed -i '/sse2neon/d' ./src/video_core/CMakeLists.txt
 mkdir build
 cd build
+
 cmake .. -GNinja \
+	-DCMAKE_C_COMPILER=clang \
+	-DCMAKE_CXX_COMPILER=clang++ \
 	-DCITRON_USE_BUNDLED_VCPKG=OFF -DCITRON_USE_BUNDLED_QT=OFF -DUSE_SYSTEM_QT=ON -DENABLE_QT6=ON \
 	-DCITRON_USE_BUNDLED_FFMPEG=OFF -DCITRON_USE_BUNDLED_SDL2=ON -DCITRON_USE_EXTERNAL_SDL2=OFF \
 	-DCITRON_TESTS=OFF -DCITRON_CHECK_SUBMODULES=OFF -DCITRON_USE_LLVM_DEMANGLE=OFF \
