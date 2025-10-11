@@ -1,7 +1,7 @@
 #!/bin/sh
 set -ex
 ARCH="${ARCH:-$(uname -m)}"
-if [ "$1" = 'v3' ] && [ "$ARCH" = 'x86_64' ]; then
+if [ "$1" = 'v3' ] && [ "$ARCH" = 'x88_64' ]; then
 	# Use -fuse-ld=lld for faster linking
 	ARCH_FLAGS="-march=x86-64-v3 -O3 -USuccess -UNone -fuse-ld=lld"
 elif [ "$ARCH" = 'x86_64' ]; then
@@ -26,6 +26,9 @@ find . -type f \( -name '*.cpp' -o -name '*.h' \) | xargs sed -i 's|#include *<b
 find . -type f \( -name '*.cpp' -o -name '*.h' \) | xargs sed -i 's/\bboost::process::async_pipe\b/boost::process::v1::async_pipe/g'
 sed -i '/sse2neon/d' ./src/video_core/CMakeLists.txt
 sed -i '/sse2neon/d' ./src/video_core/CMakeLists.txt
+
+find . -type f -name 'qt_common.cpp' | xargs sed -i 's|#include <qpa/qplatformnativeinterface.h>|#include <QtGui/qpa/qplatformnativeinterface.h>|'
+
 mkdir build
 cd build
 
