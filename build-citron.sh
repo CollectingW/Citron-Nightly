@@ -27,6 +27,8 @@ find . -type f \( -name '*.cpp' -o -name '*.h' \) | xargs sed -i 's/\bboost::pro
 sed -i '/sse2neon/d' ./src/video_core/CMakeLists.txt
 sed -i '/sse2neon/d' ./src/video_core/CMakeLists.txt
 
+find . -type f -name 'qt_common.cpp' | xargs sed -i 's|#include <qpa/qplatformnativeinterface.h>|#include <QtGui/qpa/qplatformnativeinterface.h>|'
+
 mkdir build
 cd build
 
