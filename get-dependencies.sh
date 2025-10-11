@@ -3,7 +3,6 @@
 set -ex
 ARCH="$(uname -m)"
 
-# This command installs all the full, official dependencies needed to build AND package Citron.
 pacman -Syu --noconfirm \
 	base-devel          \
 	boost               \
@@ -40,7 +39,6 @@ pacman -Syu --noconfirm \
 	qt6-tools           \
 	qt6-wayland         \
 	qt6-translations    \
-	qt6-xcb-private-headers \
 	sdl2                \
 	unzip               \
 	vulkan-headers      \
