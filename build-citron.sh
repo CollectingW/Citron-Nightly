@@ -29,6 +29,12 @@ sed -i '/sse2neon/d' ./src/video_core/CMakeLists.txt
 
 find . -type f -name 'qt_common.cpp' | xargs sed -i 's|#include <qpa/qplatformnativeinterface.h>|#include <QtGui/qpa/qplatformnativeinterface.h>|'
 
+echo "--- Finding qplatformnativeinterface.h location ---"
+pacman -Ql qt6-base | grep qplatformnativeinterface.h || echo "File not found in qt6-base"
+
+echo "--- Listing contents of /usr/include/qt6/QtGui/qpa/ ---"
+ls -l /usr/include/qt6/QtGui/qpa/ || echo "Directory not found"
+
 mkdir build
 cd build
 
