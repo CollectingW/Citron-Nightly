@@ -40,6 +40,7 @@ pacman -Syu --noconfirm \
 	qt6-tools           \
 	qt6-wayland         \
 	qt6-translations    \
+	qt6-xcb-private-headers \
 	sdl2                \
 	unzip               \
 	vulkan-headers      \
