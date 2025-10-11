@@ -7,7 +7,7 @@ if [ "$1" = 'v3' ] && [ "$ARCH" = 'x86_64' ]; then
 elif [ "$ARCH" = 'x86_64' ]; then
 	ARCH_FLAGS="-march=x86-64 -mtune=generic -O3 -USuccess -UNone -fuse-ld=lld"
 else
-	ARCH_FLAGS="-march=armv8-a -mtune=generic -O3 -USuccess -UNone -fuse-ld=lld"
+	ARCH_FLAGS="-march=armv8-a -mtune=generic -O3 -USuccess -UNone -fuse-ld-lld"
 fi
 git clone --recursive "https://git.citron-emu.org/citron/emulator.git" ./citron
 cd ./citron
@@ -27,16 +27,19 @@ find . -type f \( -name '*.cpp' -o -name '*.h' \) | xargs sed -i 's/\bboost::pro
 sed -i '/sse2neon/d' ./src/video_core/CMakeLists.txt
 sed -i '/sse2neon/d' ./src/video_core/CMakeLists.txt
 
-find . -type f -name 'qt_common.cpp' | xargs sed -i 's|#include <qpa/qplatformnativeinterface.h>|#include <QtGui/qpa/qplatformnativeinterface.h>|'
+HEADER_PATH=$(pacman -Ql qt6-base | grep 'qpa/qplatformnativeinterface.h$' | awk '{print $2}')
+if [ -z "$HEADER_PATH" ]; then
+    echo "ERROR: Could not find qplatformnativeinterface.h path." >&2
+    exit 1
+fi
 
-echo "--- Finding qplatformnativeinterface.h location ---"
-pacman -Ql qt6-base | grep qplatformnativeinterface.h || echo "File not found in qt6-base"
-
-echo "--- Listing contents of /usr/include/qt6/QtGui/qpa/ ---"
-ls -l /usr/include/qt6/QtGui/qpa/ || echo "Directory not found"
+QT_PRIVATE_INCLUDE_DIR=$(dirname "$(dirname "$HEADER_PATH")")
 
 mkdir build
 cd build
+
+# Add the dynamically found Qt6 private include directory to the compiler flags
+CXX_FLAGS_EXTRA="-I${QT_PRIVATE_INCLUDE_DIR}"
 
 cmake .. -GNinja \
 	-DCMAKE_C_COMPILER=clang \
@@ -46,9 +49,9 @@ cmake .. -GNinja \
 	-DCITRON_TESTS=OFF -DCITRON_CHECK_SUBMODULES=OFF -DCITRON_USE_LLVM_DEMANGLE=OFF \
 	-DCITRON_ENABLE_LTO=ON -DCITRON_USE_QT_MULTIMEDIA=ON -DCITRON_USE_QT_WEB_ENGINE=OFF \
 	-DENABLE_QT_TRANSLATION=ON -DUSE_DISCORD_PRESENCE=ON -DBUNDLE_SPEEX=ON -DCITRON_USE_FASTER_LD=OFF \
-	-DCITRON_USE_EXTERNAL_VULKAN_HEADERS=ON -DCITRON_USE_EXTERNAL_VULKAN_UTILITY_LIBRARIES=ON \
+	-DCITRON_USE_EXTERNAL_Vulkan_HEADERS=ON -DCITRON_USE_EXTERNAL_VULKAN_UTILITY_LIBRARIES=ON \
 	-DCITRON_ENABLE_UPDATER=OFF -DCMAKE_INSTALL_PREFIX=/usr \
-	-DCMAKE_CXX_FLAGS="$ARCH_FLAGS -Wno-error -w" -DCMAKE_C_FLAGS="$ARCH_FLAGS" \
+	-DCMAKE_CXX_FLAGS="$ARCH_FLAGS -Wno-error -w ${CXX_FLAGS_EXTRA}" -DCMAKE_C_FLAGS="$ARCH_FLAGS" \
 	-DCMAKE_SYSTEM_PROCESSOR="$(uname -m)" -DCMAKE_BUILD_TYPE=Release \
 	-DCMAKE_POLICY_VERSION_MINIMUM=3.5
 if [ -z "$JOBS" ]; then JOBS=$(nproc --all); fi
