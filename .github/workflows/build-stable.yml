@@ -10,22 +10,28 @@ on:
 
 jobs:
   build:
-    name: "${{ matrix.name }} (${{ matrix.arch }})"
-    runs-on: ${{ matrix.runs-on }}
-    timeout-minutes: 60
+    name: "${{ matrix.name }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 90 # Increased timeout for longer PGO builds
     strategy:
       matrix:
         include:
-          - runs-on: ubuntu-latest
-            optimized: false
-            name: "Citron build (Normal)"
+          - name: "Citron Build (Normal)"
             arch: x86_64
             arch_suffix: ""
-          - runs-on: ubuntu-latest
-            optimized: true
-            name: "Citron Build (Optimized)"
+            build_arg: ""
+          - name: "Citron Build (Optimized)"
             arch: x86_64
             arch_suffix: "_v3"
+            build_arg: "v3"
+          - name: "Citron Build (Normal PGO)"
+            arch: x86_64
+            arch_suffix: "_pgo"
+            build_arg: "pgo"
+          - name: "Citron Build (Optimized PGO)"
+            arch: x86_64
+            arch_suffix: "_v3_pgo"
+            build_arg: "v3-pgo"
 
     container: ghcr.io/pkgforge-dev/archlinux:latest
     steps:
@@ -39,26 +45,33 @@ jobs:
       - name: Build Citron from source
         run: |
           NPROC_VAL=$(nproc --all)
-          JOBS_VAL=$((NPROC_VAL > 2 ? NPROC_VAL / 2 : 1))
-          if ${{ matrix.optimized }}; then
-            JOBS=${JOBS_VAL} chmod +x ./build-citron.sh && JOBS=${JOBS_VAL} ./build-citron.sh v3
+          # PGO builds can be memory intensive, so we use a safer job count
+          if [[ "${{ matrix.build_arg }}" == *pgo* ]]; then
+            JOBS_VAL=$((NPROC_VAL > 4 ? 4 : NPROC_VAL))
           else
-            JOBS=${JOBS_VAL} chmod +x ./build-citron.sh && JOBS=${JOBS_VAL} ./build-citron.sh
+            JOBS_VAL=$((NPROC_VAL > 2 ? NPROC_VAL / 2 : 1))
           fi
+          
+          chmod +x ./build-citron.sh
+          # Dynamically pass the correct argument to the build script
+          JOBS=${JOBS_VAL} ./build-citron.sh ${{ matrix.build_arg }}
 
       - name: Package AppImage
         run: |
-          ARCH_SUFFIX=${{ matrix.arch_suffix }} chmod +x ./package-citron.sh && ARCH_SUFFIX=${{ matrix.arch_suffix }} ./package-citron.sh
+          chmod +x ./package-citron.sh
+          ARCH_SUFFIX=${{ matrix.arch_suffix }} ./package-citron.sh
 
       - name: Upload AppImage
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v4
         with:
-          name: AppImage-${{ matrix.optimized && 'optimized' || 'normal' }}-${{ matrix.arch }}
-          path: "dist"
+          # Simplified and more reliable artifact naming
+          name: AppImage${{ matrix.arch_suffix }}
+          path: "dist/*.AppImage*"
 
       - name: Upload version file
-        if: ${{ !matrix.optimized && matrix.arch == 'x86_64' }}
-        uses: actions/upload-artifact@v4.6.2
+        # Only upload version once from the main normal build
+        if: ${{ matrix.build_arg == '' }}
+        uses: actions/upload-artifact@v4
         with:
           name: version
           path: "dist/version"
@@ -73,13 +86,13 @@ jobs:
       contents: write
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4.3.0
+      - uses: actions/download-artifact@v4
         with:
-          pattern: AppImage-*
+          pattern: AppImage*
           merge-multiple: true
           path: .
 
-      - uses: actions/download-artifact@v4.3.0
+      - uses: actions/download-artifact@v4
         with:
           name: version
           path: .
@@ -93,7 +106,7 @@ jobs:
         run: ls -R
 
       - name: Release Artifacts
-        uses: softprops/action-gh-release@v2.2.2
+        uses: softprops/action-gh-release@v2
         with:
           name: "Citron: ${{ env.VERSION }}"
           tag_name: "${{ env.VERSION }}@${{ env.DATE }}"
