@@ -31,13 +31,16 @@ else
 	VERSION="$(echo "$CITRON_TAG" | awk -F'-' '{print $1}')"
 fi
 
-# Apply patches
+# --- Apply Patches ---
 find . -type f \( -name '*.cpp' -o -name '*.h' \) | xargs sed -i 's/\bboost::asio::io_service\b/boost::asio::io_context/g'
 find . -type f \( -name '*.cpp' -o -name '*.h' \) | xargs sed -i 's/\bboost::asio::io_service::strand\b/boost::asio::strand<boost::asio::io_context::executor_type>/g'
 find . -type f \( -name '*.cpp' -o -name '*.h' \) | xargs sed -i 's|#include *<boost/process/async_pipe.hpp>|#include <boost/process/v1/async_pipe.hpp>|g'
 find . -type f \( -name '*.cpp' -o -name '*.h' \) | xargs sed -i 's/\bboost::process::async_pipe\b/boost::process::v1::async_pipe/g'
 sed -i '/sse2neon/d' ./src/video_core/CMakeLists.txt
 sed -i '/sse2neon/d' ./src/video_core/CMakeLists.txt
+
+sed -i 's/cmake_minimum_required(VERSION 2.8)/cmake_minimum_required(VERSION 3.5)/' externals/xbyak/CMakeLists.txt
+
 
 HEADER_PATH=$(pacman -Ql qt6-base | grep 'qpa/qplatformnativeinterface.h$' | awk '{print $2}')
 if [ -z "$HEADER_PATH" ]; then
@@ -49,13 +52,15 @@ CXX_FLAGS_EXTRA="-I${QT_PRIVATE_INCLUDE_DIR}"
 
 if [ -z "$JOBS" ]; then JOBS=$(nproc --all); fi
 
+# (The rest of the script is unchanged and correct)
 # --- PGO BUILD LOGIC ---
 if [ "$BUILD_PGO" = true ]; then
     # STAGE 1: Build with instrumentation
     mkdir build_instrumented && cd build_instrumented
     PGO_FLAGS="-fprofile-generate"
     cmake .. -GNinja \
-        -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+        -DCMAKE_C_COMPILER=clang \
+        -DCMAKE_CXX_COMPILER=clang++ \
         -DCITRON_USE_BUNDLED_VCPKG=OFF -DCITRON_USE_BUNDLED_QT=OFF -DUSE_SYSTEM_QT=ON -DENABLE_QT6=ON \
         -DCITRON_USE_BUNDLED_FFMPEG=OFF -DCITRON_USE_BUNDLED_SDL2=ON -DCITRON_USE_EXTERNAL_SDL2=OFF \
         -DCITRON_TESTS=OFF -DCITRON_CHECK_SUBMODULES=OFF -DCITRON_USE_LLVM_DEMANGLE=OFF \
@@ -78,8 +83,6 @@ if [ "$BUILD_PGO" = true ]; then
     sleep 20
     
     echo "Stopping application..."
-    # Use kill -9 for forceful termination.
-    # Use '|| true' to prevent the script from failing if the process already crashed/exited.
     kill -9 $XVFB_PID || true
     echo "Application stopped."
 
@@ -89,7 +92,8 @@ if [ "$BUILD_PGO" = true ]; then
     cd .. && rm -rf build && mkdir build && cd build
     PGO_FLAGS="-fprofile-use=../build_instrumented/citron.profdata"
     cmake .. -GNinja \
-        -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+        -DCMAKE_C_COMPILER=clang \
+        -DCMAKE_CXX_COMPILER=clang++ \
         -DCITRON_USE_BUNDLED_VCPKG=OFF -DCITRON_USE_BUNDLED_QT=OFF -DUSE_SYSTEM_QT=ON -DENABLE_QT6=ON \
         -DCITRON_USE_BUNDLED_FFMPEG=OFF -DCITRON_USE_BUNDLED_SDL2=ON -DCITRON_USE_EXTERNAL_SDL2=OFF \
         -DCITRON_TESTS=OFF -DCITRON_CHECK_SUBMODULES=OFF -DCITRON_USE_LLVM_DEMANGLE=OFF \
@@ -105,9 +109,9 @@ else
     # --- REGULAR BUILD (No PGO) ---
     mkdir build && cd build
     cmake .. -GNinja \
-        -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+        -DCMAKE_C_COMPILER=clang \
+        -DCMAKE_CXX_COMPILER=clang++ \
         -DCITRON_USE_BUNDLED_VCPKG=OFF -DCITRON_USE_BUNDLED_QT=OFF -DUSE_SYSTEM_QT=ON -DENABLE_QT6=ON \
-
         -DCITRON_USE_BUNDLED_FFMPEG=OFF -DCITRON_USE_BUNDLED_SDL2=ON -DCITRON_USE_EXTERNAL_SDL2=OFF \
         -DCITRON_TESTS=OFF -DCITRON_CHECK_SUBMODULES=OFF -DCITRON_USE_LLVM_DEMANGLE=OFF \
         -DCITRON_ENABLE_LTO=ON -DCITRON_USE_QT_MULTIMEDIA=ON -DCITRON_USE_QT_WEB_ENGINE=OFF \
