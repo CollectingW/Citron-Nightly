@@ -47,7 +47,7 @@ fi
 QT_PRIVATE_INCLUDE_DIR=$(dirname "$(dirname "$HEADER_PATH")")
 CXX_FLAGS_EXTRA="-I${QT_PRIVATE_INCLUDE_DIR}"
 
-if [ "$JOBS" -z ]; then JOBS=$(nproc --all); fi
+if [ -z "$JOBS" ]; then JOBS=$(nproc --all); fi
 
 # --- PGO BUILD LOGIC ---
 if [ "$BUILD_PGO" = true ]; then
@@ -55,8 +55,7 @@ if [ "$BUILD_PGO" = true ]; then
     mkdir build_instrumented && cd build_instrumented
     PGO_FLAGS="-fprofile-generate"
     cmake .. -GNinja \
-        -DCMAKE_C_COMPILER=clang \
-        -DCMAKE_CXX_COMPILER=clang++ \
+        -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
         -DCITRON_USE_BUNDLED_VCPKG=OFF -DCITRON_USE_BUNDLED_QT=OFF -DUSE_SYSTEM_QT=ON -DENABLE_QT6=ON \
         -DCITRON_USE_BUNDLED_FFMPEG=OFF -DCITRON_USE_BUNDLED_SDL2=ON -DCITRON_USE_EXTERNAL_SDL2=OFF \
         -DCITRON_TESTS=OFF -DCITRON_CHECK_SUBMODULES=OFF -DCITRON_USE_LLVM_DEMANGLE=OFF \
@@ -70,17 +69,27 @@ if [ "$BUILD_PGO" = true ]; then
         -DCMAKE_POLICY_VERSION_MINIMUM=3.5
     ninja -j${JOBS}
 
-    # STAGE 2: Generate profile data by running the app briefly
-    # Use xvfb-run for headless execution of the GUI app
-    xvfb-run -a --server-args="-screen 0 1024x768x24" timeout 20s ./bin/citron || true
+    # STAGE 2: Generate profile data with robust backgrounding and kill logic
+    echo "Starting instrumented application to generate profile data..."
+    xvfb-run -a --server-args="-screen 0 1024x768x24" ./bin/citron &
+    XVFB_PID=$!
+    
+    echo "Running for 20 seconds to collect data... (PID: $XVFB_PID)"
+    sleep 20
+    
+    echo "Stopping application..."
+    # Use kill -9 for forceful termination.
+    # Use '|| true' to prevent the script from failing if the process already crashed/exited.
+    kill -9 $XVFB_PID || true
+    echo "Application stopped."
+
     llvm-profdata merge -o ./citron.profdata default.profraw
 
     # STAGE 3: Build again using the profile data
     cd .. && rm -rf build && mkdir build && cd build
     PGO_FLAGS="-fprofile-use=../build_instrumented/citron.profdata"
     cmake .. -GNinja \
-        -DCMAKE_C_COMPILER=clang \
-        -DCMAKE_CXX_COMPILER=clang++ \
+        -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
         -DCITRON_USE_BUNDLED_VCPKG=OFF -DCITRON_USE_BUNDLED_QT=OFF -DUSE_SYSTEM_QT=ON -DENABLE_QT6=ON \
         -DCITRON_USE_BUNDLED_FFMPEG=OFF -DCITRON_USE_BUNDLED_SDL2=ON -DCITRON_USE_EXTERNAL_SDL2=OFF \
         -DCITRON_TESTS=OFF -DCITRON_CHECK_SUBMODULES=OFF -DCITRON_USE_LLVM_DEMANGLE=OFF \
@@ -96,9 +105,9 @@ else
     # --- REGULAR BUILD (No PGO) ---
     mkdir build && cd build
     cmake .. -GNinja \
-        -DCMAKE_C_COMPILER=clang \
-        -DCMAKE_CXX_COMPILER=clang++ \
+        -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
         -DCITRON_USE_BUNDLED_VCPKG=OFF -DCITRON_USE_BUNDLED_QT=OFF -DUSE_SYSTEM_QT=ON -DENABLE_QT6=ON \
+
         -DCITRON_USE_BUNDLED_FFMPEG=OFF -DCITRON_USE_BUNDLED_SDL2=ON -DCITRON_USE_EXTERNAL_SDL2=OFF \
         -DCITRON_TESTS=OFF -DCITRON_CHECK_SUBMODULES=OFF -DCITRON_USE_LLVM_DEMANGLE=OFF \
         -DCITRON_ENABLE_LTO=ON -DCITRON_USE_QT_MULTIMEDIA=ON -DCITRON_USE_QT_WEB_ENGINE=OFF \
