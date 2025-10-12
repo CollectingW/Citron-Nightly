@@ -3,11 +3,12 @@
 set -ex
 ARCH="$(uname -m)"
 
-pacman -Syu --noconfirm \
+pacman -Syu --noconfirm --needed \
 	base-devel          \
 	boost               \
 	boost-libs          \
 	catch2              \
+	clang               \
 	cmake               \
 	curl                \
 	enet                \
@@ -24,6 +25,8 @@ pacman -Syu --noconfirm \
 	libxi               \
 	libxkbcommon-x11    \
 	libxss              \
+	lld                 \
+	llvm                \
 	mbedtls2            \
 	mesa                \
 	nasm                \
