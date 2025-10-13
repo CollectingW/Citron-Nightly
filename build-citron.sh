@@ -4,7 +4,7 @@ set -ex
 ARCH="${ARCH:-$(uname -m)}"
 BUILD_PGO=false
 
-# (Argument parsing and Git logic
+# Argument parsing and Git logic
 if [ "$1" = 'v3-pgo' ] && [ "$ARCH" = 'x86_64' ]; then
     ARCH_FLAGS="-march=x86-64-v3 -O3 -USuccess -UNone -fuse-ld=lld"
     BUILD_PGO=true
@@ -66,27 +66,25 @@ if [ "$BUILD_PGO" = true ]; then
         -DCMAKE_SYSTEM_PROCESSOR="$(uname -m)" -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5
     ninja -j${JOBS}
 
-    # STAGE 2: Generate and merge profile data (Unchanged)
+    # STAGE 2: Generate profile data
     echo "Starting instrumented application to generate profile data..."
     export LLVM_PROFILE_FILE="${PWD}/pgo-profiles/citron.profraw"
-    xvfb-run -a --server-args="-screen 0 1024x786x24" ./bin/citron &
+    xvfb-run -a --server-args="-screen 0 1024x768x24" ./bin/citron &
     XVFB_PID=$!
     echo "Running for 20 seconds to collect data... (PID: $XVFB_PID)"
     sleep 20
     echo "Stopping application..."
     kill -9 $XVFB_PID || true
     echo "Application stopped."
-    llvm-profdata merge -o ./pgo-profiles/default.profdata "${LLVM_PROFILE_FILE}"
 
-    # --- STAGE 3 PREPARATION: 
     cd .. && rm -rf build && mkdir build
-    echo "Copying profile data to the final build directory..."
-    cp build_instrumented/pgo-profiles/default.profdata build/
+    echo "Copying RAW profile data to the final build directory..."
+    # We copy the raw file, not the merged file.
+    cp build_instrumented/pgo-profiles/citron.profraw build/
     cd build
 
-
-    # STAGE 3: Build again using the local profile data
-    # We now point CITRON_PGO_PROFILE_DIR to our current directory.
+    # STAGE 3: Build again, letting CMake handle the profile merge
+    # Point CITRON_PGO_PROFILE_DIR to our current directory, where the .profraw file is.
     PGO_CMAKE_FLAGS="-DCITRON_ENABLE_PGO_USE=ON -DCITRON_PGO_PROFILE_DIR=${PWD}"
     cmake .. -GNinja \
         -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ ${PGO_CMAKE_FLAGS} \
@@ -100,7 +98,7 @@ if [ "$BUILD_PGO" = true ]; then
         -DCMAKE_CXX_FLAGS="$ARCH_FLAGS -Wno-error -w ${CXX_FLAGS_EXTRA}" -DCMAKE_C_FLAGS="$ARCH_FLAGS" \
         -DCMAKE_SYSTEM_PROCESSOR="$(uname -m)" -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 else
-    # --- REGULAR BUILD 
+    # --- REGULAR BUILD ---
     mkdir build && cd build
     cmake .. -GNinja \
         -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
