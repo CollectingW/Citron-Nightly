@@ -45,16 +45,13 @@ jobs:
       - name: Build Citron from source
         run: |
           NPROC_VAL=$(nproc --all)
-          # PGO builds can be memory intensive, so we use a safer job count
-          if [[ "${{ matrix.build_arg }}" == *pgo* ]]; then
-            JOBS_VAL=$((NPROC_VAL > 4 ? 4 : NPROC_VAL))
-          else
-            JOBS_VAL=$((NPROC_VAL > 2 ? NPROC_VAL / 2 : 1))
-          fi
+          # LTO builds are memory intensive. A safer, lower job count prevents
+          # memory thrashing and results in a faster overall build time.
+          JOBS_VAL=$((NPROC_VAL > 4 ? 4 : NPROC_VAL))
           
           chmod +x ./build-citron.sh
           # Dynamically pass the correct argument to the build script
-          JOBS=${JOBS_VAL} ./build-citron.sh ${{ matrix.build_arg }}
+          JOBS=${JOBS_VAL} DEVEL=${{ contains(github.workflow, 'Nightly') }} ./build-citron.sh ${{ matrix.build_arg }}
 
       - name: Package AppImage
         run: |
