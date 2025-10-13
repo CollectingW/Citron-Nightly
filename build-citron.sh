@@ -4,7 +4,6 @@ set -ex
 ARCH="${ARCH:-$(uname -m)}"
 BUILD_PGO=false
 
-# (Argument parsing and Git logic is unchanged)
 if [ "$1" = 'v3-pgo' ] && [ "$ARCH" = 'x86_64' ]; then
     ARCH_FLAGS="-march=x86-64-v3 -O3 -USuccess -UNone -fuse-ld=lld"
     BUILD_PGO=true
@@ -16,7 +15,9 @@ elif [ "$1" = 'v3' ] && [ "$ARCH" = 'x86_64' ]; then
 elif [ "$ARCH" = 'x86_64' ]; then
 	ARCH_FLAGS="-march=x86-64 -mtune=generic -O3 -USuccess -UNone -fuse-ld=lld"
 else
-	ARCH_FLAGS="-march=armv8-a -mtune=generic -O3 -USuccess -UNone -fuse-ld-lld"
+
+	ARCH_FLAGS="-march=armv8-a -mtune=generic -O3 -USuccess -UNone -fuse-ld=lld"
+
 fi
 
 git clone --recursive "https://git.citron-emu.org/citron/emulator.git" ./citron
@@ -31,7 +32,6 @@ else
 	VERSION="$(echo "$CITRON_TAG" | awk -F'-' '{print $1}')"
 fi
 
-# (Patching is unchanged)
 find . -type f \( -name '*.cpp' -o -name '*.h' \) | xargs sed -i 's/\bboost::asio::io_service\b/boost::asio::io_context/g'
 find . -type f \( -name '*.cpp' -o -name '*.h' \) | xargs sed -i 's/\bboost::asio::io_service::strand\b/boost::asio::strand<boost::asio::io_context::executor_type>/g'
 find . -type f \( -name '*.cpp' -o -name '*.h' \) | xargs sed -i 's|#include *<boost/process/async_pipe.hpp>|#include <boost/process/v1/async_pipe.hpp>|g'
@@ -65,7 +65,8 @@ if [ "$BUILD_PGO" = true ]; then
         -DCITRON_ENABLE_UPDATER=OFF -DCMAKE_INSTALL_PREFIX=/usr \
         -DCMAKE_CXX_FLAGS="$ARCH_FLAGS $PGO_FLAGS -Wno-error -w ${CXX_FLAGS_EXTRA}" \
         -DCMAKE_C_FLAGS="$ARCH_FLAGS $PGO_FLAGS" \
-        -DCMAKE_SYSTEM_PROCESSOR="$(uname -m)" -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+        -DCMAKE_SYSTEM_PROCESSOR="$(uname -m)" -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5
     ninja -j${JOBS}
 
     # STAGE 2: Generate, merge, and copy profile data
@@ -85,6 +86,7 @@ if [ "$BUILD_PGO" = true ]; then
     cp build_instrumented/default.profdata build/
     cd build
 
+    # STAGE 3: Build again using manual flags for reliability
     PGO_FLAGS="-fprofile-use=${PWD}/default.profdata"
     cmake .. -GNinja \
         -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
@@ -97,9 +99,10 @@ if [ "$BUILD_PGO" = true ]; then
         -DCITRON_ENABLE_UPDATER=OFF -DCMAKE_INSTALL_PREFIX=/usr \
         -DCMAKE_CXX_FLAGS="$ARCH_FLAGS $PGO_FLAGS -Wno-error -w ${CXX_FLAGS_EXTRA}" \
         -DCMAKE_C_FLAGS="$ARCH_FLAGS $PGO_FLAGS" \
-        -DCMAKE_SYSTEM_PROCESSOR="$(uname -m)" -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+        -DCMAKE_SYSTEM_PROCESSOR="$(uname -m)" -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 else
-    # --- REGULAR BUILD ---
+    # REGULAR BUILD
     mkdir build && cd build
     cmake .. -GNinja \
         -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
@@ -110,8 +113,10 @@ else
         -DENABLE_QT_TRANSLATION=ON -DUSE_DISCORD_PRESENCE=ON -DBUNDLE_SPEEX=ON -DCITRON_USE_FASTER_LD=OFF \
         -DCITRON_USE_EXTERNAL_Vulkan_HEADERS=ON -DCITRON_USE_EXTERNAL_VULKAN_UTILITY_LIBRARIES=ON \
         -DCITRON_ENABLE_UPDATER=OFF -DCMAKE_INSTALL_PREFIX=/usr \
-        -DCMAKE_CXX_FLAGS="$ARCH_FLAGS -Wno-error -w ${CXX_FLAGS_EXTRA}" -DCMAKE_C_FLAGS="$ARCH_FLAGS" \
-        -DCMAKE_SYSTEM_PROCESSOR="$(uname -m)" -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+        -DCMAKE_CXX_FLAGS="$ARCH_FLAGS -Wno-error -w ${CXX_FLAGS_EXTRA}" \
+        -DCMAKE_C_FLAGS="$ARCH_FLAGS" \
+        -DCMAKE_SYSTEM_PROCESSOR="$(uname -m)" -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 fi
 
 ninja -j${JOBS}
