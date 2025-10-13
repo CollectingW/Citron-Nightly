@@ -9,7 +9,7 @@ on:
   workflow_dispatch: {}
 
 jobs:
-  build-x86_64:
+  build:
     name: "${{ matrix.name }}"
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -34,6 +34,14 @@ jobs:
     steps:
       - name: Install Git
         run: pacman -Syu --noconfirm --needed git
+
+      - name: Cache Pacman packages
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/pacman/pkg
+          key: ${{ runner.os }}-pacman-${{ hashFiles('**/get-dependencies.sh') }}
+          restore-keys: |
+            ${{ runner.os }}-pacman-
 
       - uses: actions/checkout@v4
         with:
@@ -68,51 +76,10 @@ jobs:
           name: version
           path: "dist/version"
 
-  build-aarch64:
-    name: "Citron Build (aarch64)"
-    runs-on: ubuntu-latest
-    timeout-minutes: 300
-
-    steps:
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
-
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-          submodules: 'recursive'
-
-      - name: Run Build in aarch64 Container
-        run: |
-          docker run --rm --platform linux/aarch64 -v ${{ github.workspace }}:${{ github.workspace }} -w ${{ github.workspace }} \
-          ghcr.io/pkgforge-dev/archlinux:latest \
-          sh -c '
-            set -ex
-            # 1. Install Dependencies
-            chmod +x ./get-dependencies.sh && ./get-dependencies.sh
-            
-            # 2. Build Citron
-            NPROC_VAL=$(nproc --all)
-            JOBS_VAL=$((NPROC_VAL > 4 ? 4 : NPROC_VAL))
-            chmod +x ./build-citron.sh
-            JOBS=${JOBS_VAL} DEVEL=true ./build-citron.sh
-
-            # 3. Package AppImage
-            chmod +x ./package-citron.sh
-            ARCH_SUFFIX="_aarch64" DEVEL=true ./package-citron.sh
-          '
-      - name: Upload AppImage
-        uses: actions/upload-artifact@v4
-        with:
-          name: AppImage_aarch64
-          path: "dist/*.AppImage*"
-
   release:
     if: ${{ github.ref_name == 'main' }}
     name: "release"
-    needs: [build-x86_64, build-aarch64]
+    needs: [build]
     permissions:
       actions: read
       security-events: write
