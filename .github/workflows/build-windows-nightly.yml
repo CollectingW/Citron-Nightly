@@ -23,12 +23,9 @@ jobs:
         shell: pwsh
         run: |
           $vulkan_sdk_url = "https://sdk.lunarg.com/sdk/download/1.3.283.0/windows/VulkanSDK-1.3.283.0-Installer.exe"
-          echo "Downloading Vulkan SDK from $vulkan_sdk_url"
           Invoke-WebRequest -Uri $vulkan_sdk_url -OutFile VulkanSDK-Installer.exe
-          echo "Installing Vulkan SDK..."
           Start-Process -FilePath ".\VulkanSDK-Installer.exe" -ArgumentList "--accept-licenses", "--default-answer", "--confirm-command", "install" -Wait
           echo "C:\VulkanSDK\1.3.283.0\Bin" | Out-File -FilePath $env:GITHUB_PATH -Append
-          echo "Vulkan SDK installed and added to PATH."
 
       - name: Clone Citron Source
         shell: bash
@@ -60,6 +57,19 @@ jobs:
         shell: cmd
         run: cmake --build build --config Release --parallel
 
+      - name: Add windeployqt to PATH
+        shell: pwsh
+        run: |
+          # 1. Find the Qt installation directory on the runner.
+          $qt_path = (Get-ChildItem -Path "C:\Qt\*\msvc*\bin\windeployqt.exe" -Recurse | Select-Object -First 1).DirectoryName
+          if (-not $qt_path) {
+            echo "Error: windeployqt.exe not found on the runner."
+            exit 1
+          }
+          echo "Found Qt tools at $qt_path"
+          # 2. Add this directory to the GITHUB_PATH so we can call windeployqt directly.
+          echo $qt_path | Out-File -FilePath $env:GITHUB_PATH -Append
+
       - name: Package Windows Build
         shell: pwsh
         run: |
@@ -70,20 +80,20 @@ jobs:
           echo "Copying executables..."
           Copy-Item -Path ".\citron\build\bin\Release\*" -Destination ".\package\" -Recurse
           
-          # 3. Get the absolute path to windeployqt.exe using Resolve-Path
-          $WINDEPLOYQT_PATH = (Resolve-Path ".\citron\build\vcpkg_installed\x64-windows\tools\qt6\bin\windeployqt.exe").Path
-          echo "Found windeployqt at $WINDEPLOYQT_PATH"
+          # 3. Change directory to where the executables are, as windeployqt works best from there.
+          Set-Location ".\package"
           
-          # 4. Run windeployqt using the absolute path
+          # 4. Run windeployqt. It is now in the PATH and will find all dependencies.
           echo "Running windeployqt..."
-          & $WINDEPLOYQT_PATH --no-translations --no-compiler-runtime --dir ".\package"
+          windeployqt.exe --no-translations --no-compiler-runtime
           
           # 5. Manually copy any non-Qt dependencies.
-          $VCPKG_BIN_PATH = ".\citron\build\vcpkg_installed\x64-windows\bin"
+          $VCPKG_BIN_PATH = "..\citron\build\vcpkg_installed\x64-windows\bin"
           echo "Copying non-Qt DLLs (like SDL2)..."
-          Copy-Item -Path "$VCPKG_BIN_PATH\SDL2.dll" -Destination ".\package\"
+          Copy-Item -Path "$VCPKG_BIN_PATH\SDL2.dll" -Destination "."
           
-          # 6. Create the final .zip archive.
+          # 6. Go back to the root and create the final .zip archive.
+          Set-Location ".."
           mkdir dist
           echo "Creating final zip archive..."
           Compress-Archive -Path ".\package\*" -DestinationPath ".\dist\Citron-windows-nightly-${{ steps.version.outputs.VERSION }}.zip"
@@ -106,7 +116,6 @@ jobs:
         with:
           name: Citron-Windows-Nightly
           path: .
-      
       - name: Get Version from Filename
         shell: bash
         run: |
@@ -114,12 +123,10 @@ jobs:
           VERSION=${FILENAME#Citron-windows-nightly-}
           VERSION=${VERSION%.zip}
           echo "APP_VERSION=${VERSION}" >> $GITHUB_ENV
-
       - name: Delete Previous Release
         run: gh release delete "nightly-windows" --repo "${{ github.repository }}" --cleanup-tag -y || true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Release Artifacts
         uses: softprops/action-gh-release@v2
         with:
