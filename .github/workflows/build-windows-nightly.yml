@@ -45,7 +45,6 @@ jobs:
         shell: cmd
         run: |
           cmake -B build -S . -G "Visual Studio 17 2022" -A x64 ^
-            -DCITRON_USE_BUNDLED_VCPKG=ON ^
             -DCITRON_ENABLE_LTO=ON ^
             -DCITRON_USE_BUNDLED_QT=OFF ^
             -DUSE_SYSTEM_QT=OFF ^
@@ -60,39 +59,32 @@ jobs:
       - name: Add windeployqt to PATH
         shell: pwsh
         run: |
-          # 1. Find the Qt installation directory on the runner.
           $qt_path = (Get-ChildItem -Path "C:\Qt\*\msvc*\bin\windeployqt.exe" -Recurse | Select-Object -First 1).DirectoryName
           if (-not $qt_path) {
             echo "Error: windeployqt.exe not found on the runner."
             exit 1
           }
           echo "Found Qt tools at $qt_path"
-          # 2. Add this directory to the GITHUB_PATH so we can call windeployqt directly.
           echo $qt_path | Out-File -FilePath $env:GITHUB_PATH -Append
 
       - name: Package Windows Build
         shell: pwsh
         run: |
-          # 1. Create a clean 'package' directory.
           mkdir package
-          
-          # 2. Copy the compiled executables.
           echo "Copying executables..."
           Copy-Item -Path ".\citron\build\bin\Release\*" -Destination ".\package\" -Recurse
-          
-          # 3. Change directory to where the executables are, as windeployqt works best from there.
           Set-Location ".\package"
-          
-          # 4. Run windeployqt. It is now in the PATH and will find all dependencies.
           echo "Running windeployqt..."
           windeployqt.exe --no-translations --no-compiler-runtime
           
-          # 5. Manually copy any non-Qt dependencies.
-          $VCPKG_BIN_PATH = "..\citron\build\vcpkg_installed\x64-windows\bin"
-          echo "Copying non-Qt DLLs (like SDL2)..."
-          Copy-Item -Path "$VCPKG_BIN_PATH\SDL2.dll" -Destination "."
+          # The project's bundled dependencies will be in the build directory.
+          # We must copy any non-Qt DLLs from there.
+          $BUNDLED_BIN_PATH = "..\citron\build\bin\Release"
+          echo "Copying non-Qt DLLs (like SDL2, enet, etc.)..."
+          Copy-Item -Path "$BUNDLED_BIN_PATH\SDL2.dll" -Destination "."
+          Copy-Item -Path "$BUNDLED_BIN_PATH\enet.dll" -Destination "."
+          Copy-Item -Path "$BUNDLED_BIN_PATH\openal-soft.dll" -Destination "."
           
-          # 6. Go back to the root and create the final .zip archive.
           Set-Location ".."
           mkdir dist
           echo "Creating final zip archive..."
