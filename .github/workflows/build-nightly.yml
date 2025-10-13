@@ -12,33 +12,49 @@ jobs:
   build:
     name: "${{ matrix.name }}"
     runs-on: ubuntu-latest
-    timeout-minutes: 90 # Increased timeout for longer PGO builds
+    timeout-minutes: 120
     strategy:
       matrix:
         include:
-          - name: "Citron Build (Normal)"
+          - name: "Citron Build (Normal x86_64)"
             arch: x86_64
             arch_suffix: ""
             build_arg: ""
-          - name: "Citron Build (Optimized)"
+          - name: "Citron Build (Optimized x86_64)"
             arch: x86_64
             arch_suffix: "_v3"
             build_arg: "v3"
-          - name: "Citron Build (Normal PGO)"
+          - name: "Citron Build (Normal PGO x86_64)"
             arch: x86_64
             arch_suffix: "_pgo"
             build_arg: "pgo"
-          - name: "Citron Build (Optimized PGO)"
+          - name: "Citron Build (Optimized PGO x86_64)"
             arch: x86_64
             arch_suffix: "_v3_pgo"
             build_arg: "v3-pgo"
+          - name: "Citron Build (aarch64)"
+            arch: aarch64
+            arch_suffix: "_aarch64"
+            build_arg: ""
 
-    container: ghcr.io/pkgforge-dev/archlinux:latest
+    container:
+      image: ghcr.io/pkgforge-dev/archlinux:latest
+      options: --platform linux/${{ matrix.arch }}
+
     steps:
+      - name: Install Git
+        run: pacman -Syu --noconfirm --needed git
+
+      - name: Set up QEMU
+        if: matrix.arch == 'aarch64'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          submodules: 'recursive'
+          submodules: 'recursive' # This now works because git is installed
 
       - name: Install dependencies
         run: chmod +x ./get-dependencies.sh && ./get-dependencies.sh
@@ -46,14 +62,9 @@ jobs:
       - name: Build Citron from source
         run: |
           NPROC_VAL=$(nproc --all)
-          # LTO builds are memory intensive. A safer, lower job count prevents
-          # memory thrashing and results in a faster overall build time.
           JOBS_VAL=$((NPROC_VAL > 4 ? 4 : NPROC_VAL))
-          
           chmod +x ./build-citron.sh
-          # Dynamically pass the correct argument to the build script
-          JOBS=${JOBS_VAL} DEVEL=${{ contains(github.workflow, 'Nightly') }} ./build-citron.sh ${{ matrix.build_arg }}
-
+          JOBS=${JOBS_VAL} DEVEL=true ./build-citron.sh ${{ matrix.build_arg }}
 
       - name: Package AppImage
         run: |
