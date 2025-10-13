@@ -9,7 +9,7 @@ on:
   workflow_dispatch: {}
 
 jobs:
-  build:
+  build-x86_64:
     name: "${{ matrix.name }}"
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -17,44 +17,28 @@ jobs:
       matrix:
         include:
           - name: "Citron Build (Normal x86_64)"
-            arch: x86_64
             arch_suffix: ""
             build_arg: ""
           - name: "Citron Build (Optimized x86_64)"
-            arch: x86_64
             arch_suffix: "_v3"
             build_arg: "v3"
           - name: "Citron Build (Normal PGO x86_64)"
-            arch: x86_64
             arch_suffix: "_pgo"
             build_arg: "pgo"
           - name: "Citron Build (Optimized PGO x86_64)"
-            arch: x86_64
             arch_suffix: "_v3_pgo"
             build_arg: "v3-pgo"
-          - name: "Citron Build (aarch64)"
-            arch: aarch64
-            arch_suffix: "_aarch64"
-            build_arg: ""
 
-    container:
-      image: ghcr.io/pkgforge-dev/archlinux:latest
-      options: --platform linux/${{ matrix.arch }}
+    container: ghcr.io/pkgforge-dev/archlinux:latest
 
     steps:
       - name: Install Git
         run: pacman -Syu --noconfirm --needed git
 
-      - name: Set up QEMU
-        if: matrix.arch == 'aarch64'
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
-
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          submodules: 'recursive' # This now works because git is installed
+          submodules: 'recursive'
 
       - name: Install dependencies
         run: chmod +x ./get-dependencies.sh && ./get-dependencies.sh
@@ -74,22 +58,61 @@ jobs:
       - name: Upload AppImage
         uses: actions/upload-artifact@v4
         with:
-          # Simplified and more reliable artifact naming
           name: AppImage${{ matrix.arch_suffix }}
           path: "dist/*.AppImage*"
 
       - name: Upload version file
-        # Only upload version once from the main normal build
         if: ${{ matrix.build_arg == '' }}
         uses: actions/upload-artifact@v4
         with:
           name: version
           path: "dist/version"
 
+  build-aarch64:
+    name: "Citron Build (aarch64)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: 'recursive'
+
+      - name: Run Build in aarch64 Container
+        run: |
+          docker run --rm --platform linux/aarch64 -v ${{ github.workspace }}:${{ github.workspace }} -w ${{ github.workspace }} \
+          ghcr.io/pkgforge-dev/archlinux:latest \
+          sh -c '
+            set -ex
+            # 1. Install Dependencies
+            chmod +x ./get-dependencies.sh && ./get-dependencies.sh
+            
+            # 2. Build Citron
+            NPROC_VAL=$(nproc --all)
+            JOBS_VAL=$((NPROC_VAL > 4 ? 4 : NPROC_VAL))
+            chmod +x ./build-citron.sh
+            JOBS=${JOBS_VAL} ./build-citron.sh
+
+            # 3. Package AppImage
+            chmod +x ./package-citron.sh
+            ARCH_SUFFIX="_aarch64" ./package-citron.sh
+          '
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: AppImage_aarch64
+          path: "dist/*.AppImage*"
+
   release:
     if: ${{ github.ref_name == 'main' }}
-    name: "release"
-    needs: [build]
+    name: "Release"
+    needs: [build-x86_64, build-aarch64]
     permissions:
       actions: read
       security-events: write
