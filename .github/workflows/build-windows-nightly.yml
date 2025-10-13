@@ -12,7 +12,7 @@ jobs:
   build:
     name: "Citron Build (Windows)"
     runs-on: windows-latest
-    timeout-minutes: 120 # Increased timeout for vcpkg dependency builds
+    timeout-minutes: 120
 
     steps:
       - uses: actions/checkout@v4
@@ -40,7 +40,6 @@ jobs:
           VERSION=$(git rev-parse --short HEAD)
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
 
-      # 1. Create a complete vcpkg manifest that includes ALL dependencies, including Qt.
       - name: Create Custom Vcpkg Manifest
         working-directory: ./citron
         shell: pwsh
@@ -57,12 +56,11 @@ jobs:
                   { "name": "boost-process", "platform": "!android" },
                   "boost-range", "boost-spirit", "boost-test", "boost-timer", "boost-variant",
                   "enet", "fmt", "lz4", "nlohmann-json", "openal-soft", "opus", "libusb",
-                  "qtbase", "qtsvg", "zlib", "zstd"
+                  "qtbase", "qtsvg", "sdl2", "zlib", "zstd"
               ]
           }
           "@ | Set-Content -Path "vcpkg-ci.json"
 
-      # 2. Configure CMake to use our new, complete vcpkg manifest.
       - name: Configure CMake
         working-directory: ./citron
         shell: cmd
@@ -79,24 +77,37 @@ jobs:
         shell: cmd
         run: cmake --build build --config Release --parallel
 
-      # 3. Package the build. The paths are now reliable because we control the dependencies.
       - name: Package Windows Build
         shell: pwsh
         run: |
+          # 1. Define the source of our dependencies. This is now a reliable path.
+          $VCPKG_INSTALL_PATH = ".\citron\build\vcpkg_installed\x64-windows"
+          
+          # 2. Create a clean 'package' directory.
           mkdir package
+          
+          # 3. Copy the compiled executables.
           echo "Copying executables..."
-          Copy-Item -Path ".\citron\build\bin\Release\*" -Destination ".\package\" -Recurse
+          Copy-Item -Path ".\citron\build\bin\Release\*.exe" -Destination ".\package\"
           
-          $WINDEPLOYQT_PATH = (Resolve-Path ".\citron\build\vcpkg_installed\x64-windows\tools\qt6\bin\windeployqt.exe").Path
-          echo "Running windeployqt..."
-          & $WINDEPLOYQT_PATH --no-translations --no-compiler-runtime --dir ".\package"
+          # 4. Manually copy all required DLLs from the vcpkg bin directory.
+          echo "Copying runtime DLLs..."
+          Copy-Item -Path "$VCPKG_INSTALL_PATH\bin\Qt6Core.dll" -Destination ".\package\"
+          Copy-Item -Path "$VCPKG_INSTALL_PATH\bin\Qt6Gui.dll" -Destination ".\package\"
+          Copy-Item -Path "$VCPKG_INSTALL_PATH\bin\Qt6Widgets.dll" -Destination ".\package\"
+          Copy-Item -Path "$VCPKG_INSTALL_PATH\bin\Qt6Network.dll" -Destination ".\package\"
+          Copy-Item -Path "$VCPKG_INSTALL_PATH\bin\Qt6Svg.dll" -Destination ".\package\"
+          Copy-Item -Path "$VCPKG_INSTALL_PATH\bin\SDL2.dll" -Destination ".\package\"
+          Copy-Item -Path "$VCPKG_INSTALL_PATH\bin\enet.dll" -Destination ".\package\"
+          Copy-Item -Path "$VCPKG_INSTALL_PATH\bin\openal-soft.dll" -Destination ".\package\"
+          # Add any other required DLLs here if the app fails to start
           
-          $VCPKG_BIN_PATH = ".\citron\build\vcpkg_installed\x64-windows\bin"
-          echo "Copying non-Qt DLLs..."
-          Copy-Item -Path "$VCPKG_BIN_PATH\SDL2.dll" -Destination ".\package\"
-          Copy-Item -Path "$VCPKG_BIN_PATH\enet.dll" -Destination ".\package\"
-          Copy-Item -Path "$VCPKG_BIN_PATH\openal-soft.dll" -Destination ".\package\"
+          # 5. Manually copy the critical Qt plugins folder.
+          echo "Copying Qt plugins..."
+          Copy-Item -Path "$VCPKG_INSTALL_PATH\plugins\platforms" -Destination ".\package\platforms" -Recurse
+          Copy-Item -Path "$VCPKG_INSTALL_PATH\plugins\styles" -Destination ".\package\styles" -Recurse
           
+          # 6. Create the final .zip archive.
           mkdir dist
           echo "Creating final zip archive..."
           Compress-Archive -Path ".\package\*" -DestinationPath ".\dist\Citron-windows-nightly-${{ steps.version.outputs.VERSION }}.zip"
