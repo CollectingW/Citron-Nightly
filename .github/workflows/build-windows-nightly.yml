@@ -19,10 +19,12 @@ jobs:
         with:
           persist-credentials: false
 
+      # --- THIS IS THE FIX ---
+      # Use the correct, existing GitHub Action to install the Vulkan SDK.
       - name: Install Vulkan SDK
-        uses: j-jorge/setup-vulkan-sdk@v1
+        uses: joutvhu/setup-vulkan-sdk@v1.1.1
         with:
-
+          # Leaving the version blank gets the latest stable release
           vulkan-version: "" 
 
       - name: Clone Citron Source
