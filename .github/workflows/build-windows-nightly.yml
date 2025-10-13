@@ -8,7 +8,7 @@ on:
     - cron: "30 8 * * *"
   workflow_dispatch: {}
 
-jobs:
+jobs
   build:
     name: "Citron Build (Windows)"
     runs-on: windows-latest
@@ -19,13 +19,23 @@ jobs:
         with:
           persist-credentials: false
 
-      # --- THIS IS THE FIX ---
-      # Use the correct, existing GitHub Action to install the Vulkan SDK.
+      # --- THIS IS THE DEFINITIVE FIX ---
+      # Manually download and install the Vulkan SDK to avoid unreliable actions.
       - name: Install Vulkan SDK
-        uses: joutvhu/setup-vulkan-sdk@v1.1.1
-        with:
-          # Leaving the version blank gets the latest stable release
-          vulkan-version: "" 
+        shell: pwsh
+        run: |
+          # 1. Download the official installer
+          $vulkan_sdk_url = "https://sdk.lunarg.com/sdk/download/1.3.283.0/windows/VulkanSDK-1.3.283.0-Installer.exe"
+          echo "Downloading Vulkan SDK from $vulkan_sdk_url"
+          Invoke-WebRequest -Uri $vulkan_sdk_url -OutFile VulkanSDK-Installer.exe
+
+          # 2. Run the installer silently
+          echo "Installing Vulkan SDK..."
+          Start-Process -FilePath ".\VulkanSDK-Installer.exe" -ArgumentList "--accept-licenses", "--default-answer", "--confirm-command", "install" -Wait
+
+          # 3. Add the bin directory (containing glslangValidator) to the PATH
+          echo "C:\VulkanSDK\1.3.283.0\Bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+          echo "Vulkan SDK installed and added to PATH."
 
       - name: Clone Citron Source
         shell: bash
