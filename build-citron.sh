@@ -4,6 +4,7 @@ set -ex
 ARCH="${ARCH:-$(uname -m)}"
 BUILD_PGO=false
 
+# (Argument parsing and Git logic
 if [ "$1" = 'v3-pgo' ] && [ "$ARCH" = 'x86_64' ]; then
     ARCH_FLAGS="-march=x86-64-v3 -O3 -USuccess -UNone -fuse-ld=lld"
     BUILD_PGO=true
@@ -65,25 +66,28 @@ if [ "$BUILD_PGO" = true ]; then
         -DCMAKE_SYSTEM_PROCESSOR="$(uname -m)" -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5
     ninja -j${JOBS}
 
+    # STAGE 2: Generate and merge profile data (Unchanged)
     echo "Starting instrumented application to generate profile data..."
-
     export LLVM_PROFILE_FILE="${PWD}/pgo-profiles/citron.profraw"
-    
-    xvfb-run -a --server-args="-screen 0 1024x768x24" ./bin/citron &
+    xvfb-run -a --server-args="-screen 0 1024x786x24" ./bin/citron &
     XVFB_PID=$!
-    
     echo "Running for 20 seconds to collect data... (PID: $XVFB_PID)"
     sleep 20
-    
     echo "Stopping application..."
     kill -9 $XVFB_PID || true
     echo "Application stopped."
-
     llvm-profdata merge -o ./pgo-profiles/default.profdata "${LLVM_PROFILE_FILE}"
 
-    # STAGE 3: Build again using the profile data
-    cd .. && rm -rf build && mkdir build && cd build
-    PGO_CMAKE_FLAGS="-DCITRON_ENABLE_PGO_USE=ON -DCITRON_PGO_PROFILE_DIR=../build_instrumented/pgo-profiles"
+    # --- STAGE 3 PREPARATION: 
+    cd .. && rm -rf build && mkdir build
+    echo "Copying profile data to the final build directory..."
+    cp build_instrumented/pgo-profiles/default.profdata build/
+    cd build
+
+
+    # STAGE 3: Build again using the local profile data
+    # We now point CITRON_PGO_PROFILE_DIR to our current directory.
+    PGO_CMAKE_FLAGS="-DCITRON_ENABLE_PGO_USE=ON -DCITRON_PGO_PROFILE_DIR=${PWD}"
     cmake .. -GNinja \
         -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ ${PGO_CMAKE_FLAGS} \
         -DCITRON_USE_BUNDLED_VCPKG=OFF -DCITRON_USE_BUNDLED_QT=OFF -DUSE_SYSTEM_QT=ON -DENABLE_QT6=ON \
