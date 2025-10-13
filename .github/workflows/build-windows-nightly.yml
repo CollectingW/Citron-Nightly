@@ -77,37 +77,62 @@ jobs:
         shell: cmd
         run: cmake --build build --config Release --parallel
 
+      # Step 1: Add a debug step to list the contents of the vcpkg directory for verification.
+      - name: Debug - List Vcpkg Installed Contents
+        shell: pwsh
+        run: |
+          $vcpkg_dir = ".\citron\build\vcpkg_installed\x64-windows"
+          if (Test-Path $vcpkg_dir) {
+            echo "--- Listing contents of $vcpkg_dir ---"
+            Get-ChildItem -Path $vcpkg_dir -Recurse | Select-Object FullName
+          } else {
+            echo "Error: vcpkg installed directory not found at $vcpkg_dir"
+            exit 1
+          }
+
+      # Step 2: Rewrite the packaging step to dynamically FIND the required files.
       - name: Package Windows Build
         shell: pwsh
         run: |
-          # 1. Define the source of our dependencies. This is now a reliable path.
+          # 1. Define the base search path.
           $VCPKG_INSTALL_PATH = ".\citron\build\vcpkg_installed\x64-windows"
           
-          # 2. Create a clean 'package' directory.
-          mkdir package
+          # 2. Dynamically find the directory that contains the Qt DLLs.
+          echo "Searching for Qt Core DLL..."
+          $qt_core_dll = Get-ChildItem -Path $VCPKG_INSTALL_PATH -Recurse -Filter "Qt6Core.dll" | Select-Object -First 1
+          if (-not $qt_core_dll) {
+            echo "FATAL: Qt6Core.dll not found after build. The vcpkg installation failed."
+            exit 1
+          }
+          $QT_BIN_DIR = $qt_core_dll.DirectoryName
+          echo "Found Qt binaries in: $QT_BIN_DIR"
+
+          # 3. Dynamically find the Qt 'plugins' directory.
+          echo "Searching for Qt plugins directory..."
+          $qwindows_plugin = Get-ChildItem -Path $VCPKG_INSTALL_PATH -Recurse -Filter "qwindows.dll" | Select-Object -First 1
+          $QT_PLUGINS_DIR = $qwindows_plugin.Directory.Parent.FullName
+          echo "Found Qt plugins in: $QT_PLUGINS_DIR"
           
-          # 3. Copy the compiled executables.
+          # 4. Create the package directory and copy files from the paths we just found.
+          mkdir package
           echo "Copying executables..."
           Copy-Item -Path ".\citron\build\bin\Release\*.exe" -Destination ".\package\"
           
-          # 4. Manually copy all required DLLs from the vcpkg bin directory.
-          echo "Copying runtime DLLs..."
-          Copy-Item -Path "$VCPKG_INSTALL_PATH\bin\Qt6Core.dll" -Destination ".\package\"
-          Copy-Item -Path "$VCPKG_INSTALL_PATH\bin\Qt6Gui.dll" -Destination ".\package\"
-          Copy-Item -Path "$VCPKG_INSTALL_PATH\bin\Qt6Widgets.dll" -Destination ".\package\"
-          Copy-Item -Path "$VCPKG_INSTALL_PATH\bin\Qt6Network.dll" -Destination ".\package\"
-          Copy-Item -Path "$VCPKG_INSTALL_PATH\bin\Qt6Svg.dll" -Destination ".\package\"
-          Copy-Item -Path "$VCPKG_INSTALL_PATH\bin\SDL2.dll" -Destination ".\package\"
-          Copy-Item -Path "$VCPKG_INSTALL_PATH\bin\enet.dll" -Destination ".\package\"
-          Copy-Item -Path "$VCPKG_INSTALL_PATH\bin\openal-soft.dll" -Destination ".\package\"
-          # Add any other required DLLs here if the app fails to start
+          echo "Copying runtime DLLs from $QT_BIN_DIR..."
+          Copy-Item -Path "$QT_BIN_DIR\Qt6Core.dll" -Destination ".\package\"
+          Copy-Item -Path "$QT_BIN_DIR\Qt6Gui.dll" -Destination ".\package\"
+          Copy-Item -Path "$QT_BIN_DIR\Qt6Widgets.dll" -Destination ".\package\"
+          Copy-Item -Path "$QT_BIN_DIR\Qt6Network.dll" -Destination ".\package\"
+          Copy-Item -Path "$QT_BIN_DIR\Qt6Svg.dll" -Destination ".\package\"
+          Copy-Item -Path "$QT_BIN_DIR\SDL2.dll" -Destination ".\package\"
+          Copy-Item -Path "$QT_BIN_DIR\enet.dll" -Destination ".\package\"
+          Copy-Item -Path "$QT_BIN_DIR\openal-soft.dll" -Destination ".\package\"
           
-          # 5. Manually copy the critical Qt plugins folder.
-          echo "Copying Qt plugins..."
-          Copy-Item -Path "$VCPKG_INSTALL_PATH\plugins\platforms" -Destination ".\package\platforms" -Recurse
-          Copy-Item -Path "$VCPKG_INSTALL_PATH\plugins\styles" -Destination ".\package\styles" -Recurse
+          echo "Copying Qt plugins from $QT_PLUGINS_DIR..."
+          Copy-Item -Path "$QT_PLUGINS_DIR\platforms" -Destination ".\package\platforms" -Recurse
+          Copy-Item -Path "$QT_PLUGINS_DIR\styles" -Destination ".\package\styles" -Recurse
           
-          # 6. Create the final .zip archive.
+          # 5. Create the final archive.
           mkdir dist
           echo "Creating final zip archive..."
           Compress-Archive -Path ".\package\*" -DestinationPath ".\dist\Citron-windows-nightly-${{ steps.version.outputs.VERSION }}.zip"
@@ -134,7 +159,7 @@ jobs:
         shell: bash
         run: |
           FILENAME=$(ls *.zip)
-          VERSION=${FILENAME#Citron-windows-nightly-}
+          VERSION=${FILENAME#Citron-nightly-}
           VERSION=${VERSION%.zip}
           echo "APP_VERSION=${VERSION}" >> $GITHUB_ENV
       - name: Delete Previous Release
