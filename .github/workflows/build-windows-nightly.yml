@@ -19,10 +19,22 @@ jobs:
         with:
           persist-credentials: false
 
+      # Manually download and install the Vulkan SDK to avoid unreliable actions.
       - name: Install Vulkan SDK
-        uses: joutvhu/setup-vulkan-sdk@v1.1.1
-        with:
-          vulkan-version: "" 
+        shell: pwsh
+        run: |
+          # 1. Download the official installer from the reliable LunarG server.
+          $vulkan_sdk_url = "https://sdk.lunarg.com/sdk/download/1.3.283.0/windows/VulkanSDK-1.3.283.0-Installer.exe"
+          echo "Downloading Vulkan SDK from $vulkan_sdk_url"
+          Invoke-WebRequest -Uri $vulkan_sdk_url -OutFile VulkanSDK-Installer.exe
+
+          # 2. Run the installer silently. This is the standard procedure for unattended installs.
+          echo "Installing Vulkan SDK..."
+          Start-Process -FilePath ".\VulkanSDK-Installer.exe" -ArgumentList "--accept-licenses", "--default-answer", "--confirm-command", "install" -Wait
+
+          # 3. Add the bin directory (which contains glslangValidator.exe) to the PATH for subsequent steps.
+          echo "C:\VulkanSDK\1.3.283.0\Bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+          echo "Vulkan SDK installed and added to PATH."
 
       - name: Clone Citron Source
         shell: bash
@@ -69,7 +81,6 @@ jobs:
           echo "Found windeployqt at $WINDEPLOYQT_PATH"
           
           # 4. Run windeployqt to automatically copy all Qt DLLs and plugins.
-          # We tell it to ignore translations and the compiler runtime to keep the package clean.
           echo "Running windeployqt..."
           & $WINDEPLOYQT_PATH --no-translations --no-compiler-runtime --dir "package"
           
