@@ -19,16 +19,16 @@ jobs:
         with:
           persist-credentials: false
 
-      # --- FIX: Step 1 ---
-      # Clone the actual emulator source code, just like the Linux script does.
+      - name: Install glslang
+        shell: pwsh
+        run: choco install glslang --no-progress -y
+
       - name: Clone Citron Source
         shell: bash
         run: git clone --recursive "https://git.citron-emu.org/citron/emulator.git" citron
 
       - name: Get Nightly Version
         id: version
-        # --- FIX: Step 2 ---
-        # Run all subsequent commands inside the 'citron' subdirectory.
         working-directory: ./citron
         shell: bash
         run: |
@@ -57,8 +57,6 @@ jobs:
         shell: pwsh
         run: |
           mkdir dist
-          # --- FIX: Step 3 ---
-          # Correct the path to the built binaries.
           Compress-Archive -Path "citron/build/bin/Release/*" -DestinationPath "dist/Citron-windows-nightly-${{ steps.version.outputs.VERSION }}.zip"
 
       - name: Upload Windows Build
