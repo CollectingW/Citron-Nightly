@@ -3,11 +3,13 @@
 [![GitHub Downloads](https://img.shields.io/github/downloads/pkgforge-dev/Citron-AppImage/total?logo=github&label=GitHub%20Downloads)](https://github.com/pkgforge-dev/Citron-AppImage/releases/latest)
 [![CI Build Status](https://github.com//pkgforge-dev/Citron-AppImage/actions/workflows/build-stable.yml/badge.svg)](https://github.com/pkgforge-dev/Citron-AppImage/releases/latest)
 
-This repository makes builds for **aarch64**, **x86_64** (generic) and **x86_64_v3**. If your CPU is less than 10 years old use the x86_64_v3 build since it has a significant performance boost.
+This repository makes builds for **aarch64**, **x86_64** (generic) and **x86_64_v3**. There are also Windows Nightly Builds! If your CPU is less than 10 years old use the x86_64_v3 build since it has a significant performance boost.
 
 * [Latest Stable Release](https://github.com/pkgforge-dev/Citron-AppImage/releases/latest)
 
 * [Latest Nightly Release](https://github.com/pkgforge-dev/Citron-AppImage/releases/tag/nightly)
+
+* [Latest Windows Nightly Release](https://github.com/CollectingW/Citron-AppImage/releases/tag/nightly-windows)
 
 # READ THIS IF YOU HAVE ISSUES
 
