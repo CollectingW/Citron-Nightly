@@ -4,7 +4,7 @@ set -ex
 ARCH="${ARCH:-$(uname -m)}"
 BUILD_PGO=false
 
-# Argument parsing and Git logic
+# (Argument parsing and Git logic is unchanged)
 if [ "$1" = 'v3-pgo' ] && [ "$ARCH" = 'x86_64' ]; then
     ARCH_FLAGS="-march=x86-64-v3 -O3 -USuccess -UNone -fuse-ld=lld"
     BUILD_PGO=true
@@ -31,6 +31,7 @@ else
 	VERSION="$(echo "$CITRON_TAG" | awk -F'-' '{print $1}')"
 fi
 
+# (Patching is unchanged)
 find . -type f \( -name '*.cpp' -o -name '*.h' \) | xargs sed -i 's/\bboost::asio::io_service\b/boost::asio::io_context/g'
 find . -type f \( -name '*.cpp' -o -name '*.h' \) | xargs sed -i 's/\bboost::asio::io_service::strand\b/boost::asio::strand<boost::asio::io_context::executor_type>/g'
 find . -type f \( -name '*.cpp' -o -name '*.h' \) | xargs sed -i 's|#include *<boost/process/async_pipe.hpp>|#include <boost/process/v1/async_pipe.hpp>|g'
@@ -50,11 +51,11 @@ CXX_FLAGS_EXTRA="-I${QT_PRIVATE_INCLUDE_DIR}"
 if [ -z "$JOBS" ]; then JOBS=$(nproc --all); fi
 
 if [ "$BUILD_PGO" = true ]; then
-    # STAGE 1: Build with instrumentation 
+    # STAGE 1: Build with instrumentation using manual flags for reliability
     mkdir build_instrumented && cd build_instrumented
-    PGO_CMAKE_FLAGS="-DCITRON_ENABLE_PGO_GENERATE=ON -DCITRON_PGO_PROFILE_DIR=${PWD}/pgo-profiles"
+    PGO_FLAGS="-fprofile-generate"
     cmake .. -GNinja \
-        -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ ${PGO_CMAKE_FLAGS} \
+        -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
         -DCITRON_USE_BUNDLED_VCPKG=OFF -DCITRON_USE_BUNDLED_QT=OFF -DUSE_SYSTEM_QT=ON -DENABLE_QT6=ON \
         -DCITRON_USE_BUNDLED_FFMPEG=OFF -DCITRON_USE_BUNDLED_SDL2=ON -DCITRON_USE_EXTERNAL_SDL2=OFF \
         -DCITRON_TESTS=OFF -DCITRON_CHECK_SUBMODULES=OFF -DCITRON_USE_LLVM_DEMANGLE=OFF \
@@ -62,13 +63,14 @@ if [ "$BUILD_PGO" = true ]; then
         -DENABLE_QT_TRANSLATION=ON -DUSE_DISCORD_PRESENCE=ON -DBUNDLE_SPEEX=ON -DCITRON_USE_FASTER_LD=OFF \
         -DCITRON_USE_EXTERNAL_Vulkan_HEADERS=ON -DCITRON_USE_EXTERNAL_VULKAN_UTILITY_LIBRARIES=ON \
         -DCITRON_ENABLE_UPDATER=OFF -DCMAKE_INSTALL_PREFIX=/usr \
-        -DCMAKE_CXX_FLAGS="$ARCH_FLAGS -Wno-error -w ${CXX_FLAGS_EXTRA}" -DCMAKE_C_FLAGS="$ARCH_FLAGS" \
+        -DCMAKE_CXX_FLAGS="$ARCH_FLAGS $PGO_FLAGS -Wno-error -w ${CXX_FLAGS_EXTRA}" \
+        -DCMAKE_C_FLAGS="$ARCH_FLAGS $PGO_FLAGS" \
         -DCMAKE_SYSTEM_PROCESSOR="$(uname -m)" -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5
     ninja -j${JOBS}
 
-    # STAGE 2: Generate profile data
+    # STAGE 2: Generate, merge, and copy profile data
     echo "Starting instrumented application to generate profile data..."
-    export LLVM_PROFILE_FILE="${PWD}/pgo-profiles/citron.profraw"
+    export LLVM_PROFILE_FILE="${PWD}/citron.profraw"
     xvfb-run -a --server-args="-screen 0 1024x768x24" ./bin/citron &
     XVFB_PID=$!
     echo "Running for 20 seconds to collect data... (PID: $XVFB_PID)"
@@ -76,18 +78,16 @@ if [ "$BUILD_PGO" = true ]; then
     echo "Stopping application..."
     kill -9 $XVFB_PID || true
     echo "Application stopped."
-
+    llvm-profdata merge -o ./default.profdata "${LLVM_PROFILE_FILE}"
+    
     cd .. && rm -rf build && mkdir build
-    echo "Copying RAW profile data to the final build directory..."
-    # We copy the raw file, not the merged file.
-    cp build_instrumented/pgo-profiles/citron.profraw build/
+    echo "Copying profile data to the final build directory..."
+    cp build_instrumented/default.profdata build/
     cd build
 
-    # STAGE 3: Build again, letting CMake handle the profile merge
-    # Point CITRON_PGO_PROFILE_DIR to our current directory, where the .profraw file is.
-    PGO_CMAKE_FLAGS="-DCITRON_ENABLE_PGO_USE=ON -DCITRON_PGO_PROFILE_DIR=${PWD}"
+    PGO_FLAGS="-fprofile-use=${PWD}/default.profdata"
     cmake .. -GNinja \
-        -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ ${PGO_CMAKE_FLAGS} \
+        -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
         -DCITRON_USE_BUNDLED_VCPKG=OFF -DCITRON_USE_BUNDLED_QT=OFF -DUSE_SYSTEM_QT=ON -DENABLE_QT6=ON \
         -DCITRON_USE_BUNDLED_FFMPEG=OFF -DCITRON_USE_BUNDLED_SDL2=ON -DCITRON_USE_EXTERNAL_SDL2=OFF \
         -DCITRON_TESTS=OFF -DCITRON_CHECK_SUBMODULES=OFF -DCITRON_USE_LLVM_DEMANGLE=OFF \
@@ -95,7 +95,8 @@ if [ "$BUILD_PGO" = true ]; then
         -DENABLE_QT_TRANSLATION=ON -DUSE_DISCORD_PRESENCE=ON -DBUNDLE_SPEEX=ON -DCITRON_USE_FASTER_LD=OFF \
         -DCITRON_USE_EXTERNAL_Vulkan_HEADERS=ON -DCITRON_USE_EXTERNAL_VULKAN_UTILITY_LIBRARIES=ON \
         -DCITRON_ENABLE_UPDATER=OFF -DCMAKE_INSTALL_PREFIX=/usr \
-        -DCMAKE_CXX_FLAGS="$ARCH_FLAGS -Wno-error -w ${CXX_FLAGS_EXTRA}" -DCMAKE_C_FLAGS="$ARCH_FLAGS" \
+        -DCMAKE_CXX_FLAGS="$ARCH_FLAGS $PGO_FLAGS -Wno-error -w ${CXX_FLAGS_EXTRA}" \
+        -DCMAKE_C_FLAGS="$ARCH_FLAGS $PGO_FLAGS" \
         -DCMAKE_SYSTEM_PROCESSOR="$(uname -m)" -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 else
     # --- REGULAR BUILD ---
