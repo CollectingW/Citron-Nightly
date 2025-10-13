@@ -12,7 +12,7 @@ jobs:
   build:
     name: "Citron Build (Windows)"
     runs-on: windows-latest
-    timeout-minutes: 90
+    timeout-minutes: 120 # Increased timeout for vcpkg dependency builds
 
     steps:
       - uses: actions/checkout@v4
@@ -40,15 +40,38 @@ jobs:
           VERSION=$(git rev-parse --short HEAD)
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
 
+      # 1. Create a complete vcpkg manifest that includes ALL dependencies, including Qt.
+      - name: Create Custom Vcpkg Manifest
+        working-directory: ./citron
+        shell: pwsh
+        run: |
+          @"
+          {
+              "`$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+              "name": "citron-ci",
+              "builtin-baseline": "bc994510d2eb11aac7b43b03f67a7751d5bfe0e4",
+              "dependencies": [
+                  "boost-algorithm", "boost-asio", "boost-bind", "boost-config",
+                  "boost-container", "boost-context", "boost-crc", "boost-functional",
+                  "boost-heap", "boost-icl", "boost-intrusive", "boost-mpl",
+                  { "name": "boost-process", "platform": "!android" },
+                  "boost-range", "boost-spirit", "boost-test", "boost-timer", "boost-variant",
+                  "enet", "fmt", "lz4", "nlohmann-json", "openal-soft", "opus", "libusb",
+                  "qtbase", "qtsvg", "zlib", "zstd"
+              ]
+          }
+          "@ | Set-Content -Path "vcpkg-ci.json"
+
+      # 2. Configure CMake to use our new, complete vcpkg manifest.
       - name: Configure CMake
         working-directory: ./citron
         shell: cmd
         run: |
           cmake -B build -S . -G "Visual Studio 17 2022" -A x64 ^
+            -DCMAKE_TOOLCHAIN_FILE=externals/vcpkg/scripts/buildsystems/vcpkg.cmake ^
+            -DVCPKG_MANIFEST_PATH=vcpkg-ci.json ^
+            -DCITRON_USE_BUNDLED_VCPKG=ON ^
             -DCITRON_ENABLE_LTO=ON ^
-            -DCITRON_USE_BUNDLED_QT=OFF ^
-            -DUSE_SYSTEM_QT=OFF ^
-            -DENABLE_QT6=ON ^
             -DCITRON_TESTS=OFF
 
       - name: Build Citron
@@ -56,36 +79,24 @@ jobs:
         shell: cmd
         run: cmake --build build --config Release --parallel
 
-      - name: Add windeployqt to PATH
-        shell: pwsh
-        run: |
-          $qt_path = (Get-ChildItem -Path "C:\Qt\*\msvc*\bin\windeployqt.exe" -Recurse | Select-Object -First 1).DirectoryName
-          if (-not $qt_path) {
-            echo "Error: windeployqt.exe not found on the runner."
-            exit 1
-          }
-          echo "Found Qt tools at $qt_path"
-          echo $qt_path | Out-File -FilePath $env:GITHUB_PATH -Append
-
+      # 3. Package the build. The paths are now reliable because we control the dependencies.
       - name: Package Windows Build
         shell: pwsh
         run: |
           mkdir package
           echo "Copying executables..."
           Copy-Item -Path ".\citron\build\bin\Release\*" -Destination ".\package\" -Recurse
-          Set-Location ".\package"
+          
+          $WINDEPLOYQT_PATH = (Resolve-Path ".\citron\build\vcpkg_installed\x64-windows\tools\qt6\bin\windeployqt.exe").Path
           echo "Running windeployqt..."
-          windeployqt.exe --no-translations --no-compiler-runtime
+          & $WINDEPLOYQT_PATH --no-translations --no-compiler-runtime --dir ".\package"
           
-          # The project's bundled dependencies will be in the build directory.
-          # We must copy any non-Qt DLLs from there.
-          $BUNDLED_BIN_PATH = "..\citron\build\bin\Release"
-          echo "Copying non-Qt DLLs (like SDL2, enet, etc.)..."
-          Copy-Item -Path "$BUNDLED_BIN_PATH\SDL2.dll" -Destination "."
-          Copy-Item -Path "$BUNDLED_BIN_PATH\enet.dll" -Destination "."
-          Copy-Item -Path "$BUNDLED_BIN_PATH\openal-soft.dll" -Destination "."
+          $VCPKG_BIN_PATH = ".\citron\build\vcpkg_installed\x64-windows\bin"
+          echo "Copying non-Qt DLLs..."
+          Copy-Item -Path "$VCPKG_BIN_PATH\SDL2.dll" -Destination ".\package\"
+          Copy-Item -Path "$VCPKG_BIN_PATH\enet.dll" -Destination ".\package\"
+          Copy-Item -Path "$VCPKG_BIN_PATH\openal-soft.dll" -Destination ".\package\"
           
-          Set-Location ".."
           mkdir dist
           echo "Creating final zip archive..."
           Compress-Archive -Path ".\package\*" -DestinationPath ".\dist\Citron-windows-nightly-${{ steps.version.outputs.VERSION }}.zip"
