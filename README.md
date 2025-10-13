@@ -5,9 +5,9 @@
 
 This repository makes builds for **aarch64**, **x86_64** (generic) and **x86_64_v3**. There are also Windows Nightly Builds! If your CPU is less than 10 years old use the x86_64_v3 build since it has a significant performance boost.
 
-* [Latest Stable Release](https://github.com/pkgforge-dev/Citron-AppImage/releases/latest)
+* [Latest Stable Release](https://github.com/CollectingW/Citron-AppImage/releases/tag/0.7.0%402025-09-27_1759008725)
 
-* [Latest Nightly Release](https://github.com/pkgforge-dev/Citron-AppImage/releases/tag/nightly)
+* [Latest Nightly Release](https://github.com/CollectingW/Citron-AppImage/releases/tag/nightly)
 
 * [Latest Windows Nightly Release](https://github.com/CollectingW/Citron-AppImage/releases/tag/nightly-windows)
 
