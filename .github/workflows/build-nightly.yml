@@ -63,9 +63,13 @@ jobs:
           JOBS=${JOBS_VAL} DEVEL=true ./build-citron.sh ${{ matrix.build_arg }}
 
       - name: Package AppImage
+        env:
+          APP_VERSION: ${{ env.APP_VERSION }}
+          ARCH_SUFFIX: ${{ matrix.arch_suffix }}
+          DEVEL: "true"
         run: |
           chmod +x ./package-citron.sh
-          APP_VERSION=${{ env.APP_VERSION }} ARCH_SUFFIX=${{ matrix.arch_suffix }} DEVEL=true ./package-citron.sh
+          ./package-citron.sh
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
