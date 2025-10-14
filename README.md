@@ -5,7 +5,7 @@
 
 This repository makes Nightly builds for **x86_64** (generic) and **x86_64_v3** on Linux, and also Windows & Android builds! If your CPU is less than 10 years old, for Linux, use the x86_64_v3 build since it has a significant performance boost.
 
-* [Latest Nightly Release](https://github.com/CollectingW/Citron-AppImage/releases/tag/nightly)
+* [Latest Linux Nightly Release](https://github.com/CollectingW/Citron-AppImage/releases/tag/nightly)
 
 * [Latest Windows Nightly Release](https://github.com/CollectingW/Citron-AppImage/releases/tag/nightly-windows)
 
