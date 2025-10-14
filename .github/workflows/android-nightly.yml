@@ -32,24 +32,23 @@ jobs:
         run: |
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
           unzip -q commandlinetools-linux-11076708_latest.zip
-          
-          # Create the directory structure required by sdkmanager
           mkdir -p android-sdk/cmdline-tools
           mv cmdline-tools android-sdk/cmdline-tools/latest
-          
           echo "ANDROID_HOME=$PWD/android-sdk" >> $GITHUB_ENV
           echo "$PWD/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
 
       - name: Accept Android SDK licenses and install components
         run: |
-          # Install the correct SDK platform version demanded by the build script
           yes | sdkmanager --licenses > /dev/null || true
           sdkmanager "platform-tools" "platforms;android-35" "build-tools;34.0.0"
 
       - name: Build APK with Gradle
         run: |
-        
           cd citron_source/src/android
+          
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          
+          # Now, execute the build in the harmonized environment.
           ./gradlew assembleMainlineRelease
 
       - name: Upload APK artifact
