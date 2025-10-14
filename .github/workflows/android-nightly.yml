@@ -15,6 +15,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Clone Citron Source Code
+      
         run: git clone --recursive --depth 1 https://git.citron-emu.org/citron/emulator.git citron_source
 
       - name: Set up JDK 17
@@ -75,17 +76,12 @@ jobs:
 
   release-android:
     name: "Release Android Nightly"
-    needs: [build-android] 
+    needs: [build-android]
     permissions:
-      contents: write # This permission is required to create a release
+      contents: write
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout repository to get git hash
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
       - name: Download APK artifact
         uses: actions/download-artifact@v4
         with:
@@ -95,8 +91,12 @@ jobs:
       - name: Get version info for release name
         shell: bash
         run: |
+          # The filename itself contains the git hash from the build
+          APK_FILE=$(ls *.apk)
+          # Extract the hash (e.g., citron-app-release-v1.0-1234-gc15b6519.apk -> c15b6519)
+          GIT_HASH=$(echo "$APK_FILE" | sed -n 's/.*-g\([0-9a-f]\{7,12\}\).*/\1/p')
           echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
-          echo "GIT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+          echo "GIT_HASH=$GIT_HASH" >> $GITHUB_ENV
           
       - name: Delete previous nightly release and tag
         run: gh release delete "nightly-android" --repo "${{ github.repository }}" --cleanup-tag -y || true
