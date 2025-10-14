@@ -49,8 +49,8 @@ jobs:
           submodules: 'recursive'
 
       - name: Set Version
-        id: version
-        run: echo "APP_VERSION=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+        id: version # This ID is crucial
+        run: echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Install dependencies
         run: chmod +x ./get-dependencies.sh && ./get-dependencies.sh
@@ -64,12 +64,12 @@ jobs:
 
       - name: Package AppImage
         env:
-          APP_VERSION: ${{ env.APP_VERSION }}
+
+          APP_VERSION: ${{ steps.version.outputs.sha }}
           ARCH_SUFFIX: ${{ matrix.arch_suffix }}
           DEVEL: "true"
         run: |
           echo "Running package script with APP_VERSION: [${APP_VERSION}]"
-
           chmod +x ./package-citron.sh
           ./package-citron.sh
 
@@ -78,7 +78,7 @@ jobs:
         with:
           name: Artifacts${{ matrix.arch_suffix }}
           path: dist/
-
+  
   release:
     if: ${{ github.ref_name == 'main' }}
     name: "release"
@@ -90,6 +90,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set Version
+      
         run: echo "APP_VERSION=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
       - name: Download all artifacts
