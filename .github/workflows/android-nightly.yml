@@ -1,4 +1,5 @@
-name: Build Citron (Android Nightly)
+name: Android Nightly Build and Release
+
 on:
   workflow_dispatch:
   schedule:
@@ -41,13 +42,6 @@ jobs:
           yes | sdkmanager --licenses > /dev/null || true
           sdkmanager "platform-tools" "platforms;android-35" "build-tools;34.0.0"
 
-      - name: Install Android NDK
-        run: |
-          wget -q https://dl.google.com/android/repository/android-ndk-r26b-linux.zip
-          unzip -q android-ndk-r26b-linux.zip
-          echo "ANDROID_NDK_HOME=$PWD/android-ndk-r26b" >> $GITHUB_ENV
-
-      # --- STAGE 1 ---
       - name: Configure CMake
         run: |
           cmake -B build-android -S citron_source \
@@ -67,16 +61,10 @@ jobs:
         run: |
           cmake --build build-android --config Release --parallel $(nproc)
 
-      # --- STAGE 2: ANDROID PACKAGING ---
       - name: Build APK with Gradle
         run: |
           cd citron_source/src/android
-          
-          # The runner sets a default ANDROID_SDK_ROOT. We MUST override it.
-          # Forcing it to equal our correct ANDROID_HOME path prevents a conflict.
           export ANDROID_SDK_ROOT="$ANDROID_HOME"
-          
-          # Execute the Gradle build, which will find the libraries built by CMake.
           ./gradlew assembleMainlineRelease
 
       - name: Upload APK artifact
@@ -84,3 +72,41 @@ jobs:
         with:
           name: citron-android-nightly
           path: citron_source/src/android/app/build/outputs/apk/mainline/release/*.apk
+
+  release-android:
+    name: "Release Android Nightly"
+    needs: [build-android] 
+    permissions:
+      contents: write # This permission is required to create a release
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository to get git hash
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download APK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: citron-android-nightly
+          path: .
+
+      - name: Get version info for release name
+        shell: bash
+        run: |
+          echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+          echo "GIT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+          
+      - name: Delete previous nightly release and tag
+        run: gh release delete "nightly-android" --repo "${{ github.repository }}" --cleanup-tag -y || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create new nightly release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Android Nightly ${{ env.DATE }} (${{ env.GIT_HASH }})"
+          tag_name: "nightly-android"
+          prerelease: true
+          files: "*.apk"
