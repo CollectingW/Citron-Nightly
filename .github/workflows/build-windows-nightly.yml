@@ -40,9 +40,6 @@ jobs:
           VERSION=$(git rev-parse --short HEAD)
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
 
-      # --- THIS IS THE DEFINITIVE FIX ---
-      # We tell the project to handle ALL of its own dependencies, including Qt.
-      # We no longer use any custom manifests or conflicting flags.
       - name: Configure CMake
         working-directory: ./citron
         shell: cmd
@@ -52,7 +49,7 @@ jobs:
             -DCITRON_ENABLE_LTO=ON ^
             -DCITRON_USE_BUNDLED_QT=ON ^
             -DENABLE_QT6=ON ^
-            -DCITRON_TESTS=OFF
+            -DCITRON_TESTS=OFF ^
             -DUSE_DISCORD_PRESENCE=ON
 
       - name: Build Citron
@@ -60,8 +57,6 @@ jobs:
         shell: cmd
         run: cmake --build build --config Release --parallel
 
-      # The project's build system should have placed all necessary DLLs
-      # directly into the output directory. We just need to zip it.
       - name: Package Windows Build
         shell: pwsh
         run: |
