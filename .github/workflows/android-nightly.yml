@@ -10,9 +10,19 @@ jobs:
     name: Build Android APK
     runs-on: ubuntu-24.04
 
+    outputs:
+      git_hash: ${{ steps.get_hash.outputs.git_hash }}
+
     steps:
       - name: Clone Citron Source Code
         run: git clone --recursive --depth 1 https://git.citron-emu.org/citron/emulator.git citron_source
+
+      - name: Get Citron Commit Hash
+        id: get_hash # Give this step an ID to reference it later
+        run: |
+          # Go into the source directory and get the short hash
+          cd citron_source
+          echo "git_hash=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -72,7 +82,7 @@ jobs:
 
   release-android:
     name: "Release Android Nightly"
-    needs: [build-android]
+    needs: [build-android] 
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -84,18 +94,12 @@ jobs:
           name: citron-android-nightly
           path: .
 
-      - name: Get version from artifact filename
+      - name: Get version info for release name
         shell: bash
         run: |
-          # Find the APK file in the current directory
-          APK_FILE=$(ls *.apk)
-          
-          # The filename contains the git hash (e.g., ...-g1234567.apk)
-          # This command extracts that hash.
-          GIT_HASH=$(echo "$APK_FILE" | sed -n 's/.*-g\([0-9a-f]\{7,12\}\).*/\1/p')
-          
           echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
-          echo "GIT_HASH=$GIT_HASH" >> $GITHUB_ENV
+          # Read the hash directly from the build job's output
+          echo "GIT_HASH=${{ needs.build-android.outputs.git_hash }}" >> $GITHUB_ENV
           
       - name: Delete previous nightly release and tag
         run: gh release delete "nightly-android" --repo "${{ github.repository }}" --cleanup-tag -y || true
@@ -105,7 +109,6 @@ jobs:
       - name: Create new nightly release
         uses: softprops/action-gh-release@v2
         with:
-
           name: "Android Nightly ${{ env.DATE }} (${{ env.GIT_HASH }})"
           tag_name: "nightly-android"
           prerelease: true
