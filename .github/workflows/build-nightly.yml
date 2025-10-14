@@ -68,6 +68,8 @@ jobs:
           ARCH_SUFFIX: ${{ matrix.arch_suffix }}
           DEVEL: "true"
         run: |
+          echo "Running package script with APP_VERSION: [${APP_VERSION}]"
+
           chmod +x ./package-citron.sh
           ./package-citron.sh
 
