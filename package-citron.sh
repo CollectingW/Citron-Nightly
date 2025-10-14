@@ -2,14 +2,14 @@
 set -ex
 ARCH="${ARCH:-$(uname -m)}"
 
-ARCH="${ARCH}${ARCH_SUFFIX}"
+# Construct unique names for the AppImage and tarball based on the build matrix.
+OUTNAME_BASE="citron_nightly-${ARCH}"
+export OUTNAME_APPIMAGE="${OUTNAME_BASE}${ARCH_SUFFIX}.AppImage"
+export OUTNAME_TAR="${OUTNAME_BASE}${ARCH_SUFFIX}.tar.zst"
 
-VERSION="$(cat ~/version)"
 URUNTIME="https://raw.githubusercontent.com/pkgforge-dev/Anylinux-AppImages/refs/heads/main/useful-tools/uruntime2appimage.sh"
 SHARUN="https://raw.githubusercontent.com/pkgforge-dev/Anylinux-AppImages/refs/heads/main/useful-tools/quick-sharun.sh"
 
-export OUTNAME_APPIMAGE=Citron-"$VERSION"-anylinux-"$ARCH".AppImage
-export OUTNAME_TAR=Citron-"$VERSION"-anylinux-"$ARCH".tar.zst
 export DESKTOP=/usr/share/applications/org.citron_emu.citron.desktop
 export ICON=/usr/share/icons/hicolor/scalable/apps/org.citron_emu.citron.svg
 export DEPLOY_OPENGL=1
@@ -49,4 +49,8 @@ mkdir -p ./dist
 # Move both the AppImage and the tar.zst to the dist folder
 mv -v ./*.AppImage* ./dist
 mv -v ./*.tar.zst ./dist
-mv -v ~/version ./dist
+
+# Check for the version file and move it to the dist folder if it exists.
+if [ -f ~/version ]; then
+  mv -v ~/version ./dist
+fi
