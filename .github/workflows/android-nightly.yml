@@ -9,7 +9,6 @@ jobs:
   build-android:
     name: Build Android APK
     runs-on: ubuntu-24.04
-
     outputs:
       git_hash: ${{ steps.get_hash.outputs.git_hash }}
 
@@ -17,12 +16,16 @@ jobs:
       - name: Clone Citron Source Code
         run: git clone --recursive --depth 1 https://git.citron-emu.org/citron/emulator.git citron_source
 
-      - name: Get Citron Commit Hash
-        id: get_hash # Give this step an ID to reference it later
+      - name: Clean and Force-Update Submodules
+        working-directory: ./citron_source
         run: |
-          # Go into the source directory and get the short hash
-          cd citron_source
-          echo "git_hash=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          git submodule deinit --all --force
+          git submodule update --init --recursive --force
+
+      - name: Get Citron Commit Hash
+        id: get_hash
+        working-directory: ./citron_source
+        run: echo "git_hash=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -47,7 +50,13 @@ jobs:
       - name: Accept Android SDK licenses and install components
         run: |
           yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;34.0.0"
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Install Android NDK
+        run: |
+          wget -q https://dl.google.com/android/repository/android-ndk-r26b-linux.zip
+          unzip -q android-ndk-r26b-linux.zip
+          echo "ANDROID_NDK_HOME=$PWD/android-ndk-r26b" >> $GITHUB_ENV
 
       - name: Configure CMake
         run: |
@@ -82,7 +91,7 @@ jobs:
 
   release-android:
     name: "Release Android Nightly"
-    needs: [build-android] 
+    needs: [build-android]
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -98,7 +107,6 @@ jobs:
         shell: bash
         run: |
           echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
-          # Read the hash directly from the build job's output
           echo "GIT_HASH=${{ needs.build-android.outputs.git_hash }}" >> $GITHUB_ENV
           
       - name: Delete previous nightly release and tag
@@ -109,7 +117,7 @@ jobs:
       - name: Create new nightly release
         uses: softprops/action-gh-release@v2
         with:
-          name: "Android Nightly ${{ env.DATE }} (${{ env.GIT_HASH }})"
+          name: "Continuous Build: Android Nightly: (${{ env.GIT_HASH }})"
           tag_name: "nightly-android"
           prerelease: true
           files: "*.apk"
