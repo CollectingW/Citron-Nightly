@@ -35,7 +35,9 @@ jobs:
           unzip -q commandlinetools-linux-11076708_latest.zip
           mkdir -p android-sdk/cmdline-tools
           mv cmdline-tools android-sdk/cmdline-tools/latest
-          echo "ANDROID_SDK_ROOT=$PWD/android-sdk" >> $GITHUB_ENV
+          # --- THIS IS THE FIX ---
+          # Set the recommended ANDROID_HOME variable instead of ANDROID_SDK_ROOT
+          echo "ANDROID_HOME=$PWD/android-sdk" >> $GITHUB_ENV
           echo "$PWD/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
 
       - name: Accept Android SDK licenses and install components
@@ -51,7 +53,6 @@ jobs:
 
       - name: Configure CMake
         run: |
-          # Pointing CMake to the newly cloned 'citron_source' directory
           cmake -B build-android -S citron_source \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
@@ -71,7 +72,6 @@ jobs:
 
       - name: Build APK with Gradle
         run: |
-          # Using the correct path inside the 'citron_source' directory
           cd citron_source/src/android
           ./gradlew assembleMainlineRelease
 
@@ -79,5 +79,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: citron-android-nightly
-          
           path: citron_source/src/android/app/build/outputs/apk/mainline/release/*.apk
