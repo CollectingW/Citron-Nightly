@@ -50,9 +50,9 @@ jobs:
           echo "ANDROID_NDK_HOME=$PWD/android-ndk-r26b" >> $GITHUB_ENV
 
       - name: Configure CMake
-
         run: |
-          cmake -B build-android -S citron \
+          # Pointing CMake to the correct source directory: 'emulator'
+          cmake -B build-android -S emulator \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
             -DANDROID_ABI=arm64-v8a \
@@ -70,13 +70,14 @@ jobs:
           cmake --build build-android --config Release --parallel $(nproc)
 
       - name: Build APK with Gradle
-
         run: |
-          cd citron/src/android
+          # Using the correct path to the android project
+          cd emulator/src/android
           ./gradlew assembleMainlineRelease
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: citron-android-nightly
-          path: citron/src/android/app/build/outputs/apk/mainline/release/*.apk
+
+          path: emulator/src/android/app/build/outputs/apk/mainline/release/*.apk
