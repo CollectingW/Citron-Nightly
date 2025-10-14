@@ -1,3 +1,12 @@
+name: Android Nightly Build
+
+on:
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+  # Runs at midnight UTC every day
+  schedule:
+    - cron: '0 0 * * *'
+
 jobs:
   build-android:
     name: Build Android APK
@@ -41,6 +50,7 @@ jobs:
           echo "ANDROID_NDK_HOME=$PWD/android-ndk-r26b" >> $GITHUB_ENV
 
       - name: Configure CMake
+
         run: |
           cmake -B build-android -S citron \
             -DCMAKE_BUILD_TYPE=Release \
@@ -60,6 +70,7 @@ jobs:
           cmake --build build-android --config Release --parallel $(nproc)
 
       - name: Build APK with Gradle
+
         run: |
           cd citron/src/android
           ./gradlew assembleMainlineRelease
