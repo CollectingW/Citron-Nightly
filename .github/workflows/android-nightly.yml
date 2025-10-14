@@ -11,11 +11,7 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Checkout your builder repository
-        uses: actions/checkout@v4
-
       - name: Clone Citron Source Code
-      
         run: git clone --recursive --depth 1 https://git.citron-emu.org/citron/emulator.git citron_source
 
       - name: Set up JDK 17
@@ -88,13 +84,16 @@ jobs:
           name: citron-android-nightly
           path: .
 
-      - name: Get version info for release name
+      - name: Get version from artifact filename
         shell: bash
         run: |
-          # The filename itself contains the git hash from the build
+          # Find the APK file in the current directory
           APK_FILE=$(ls *.apk)
-          # Extract the hash (e.g., citron-app-release-v1.0-1234-gc15b6519.apk -> c15b6519)
+          
+          # The filename contains the git hash (e.g., ...-g1234567.apk)
+          # This command extracts that hash.
           GIT_HASH=$(echo "$APK_FILE" | sed -n 's/.*-g\([0-9a-f]\{7,12\}\).*/\1/p')
+          
           echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
           echo "GIT_HASH=$GIT_HASH" >> $GITHUB_ENV
           
@@ -106,6 +105,7 @@ jobs:
       - name: Create new nightly release
         uses: softprops/action-gh-release@v2
         with:
+
           name: "Android Nightly ${{ env.DATE }} (${{ env.GIT_HASH }})"
           tag_name: "nightly-android"
           prerelease: true
