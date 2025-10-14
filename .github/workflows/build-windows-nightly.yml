@@ -53,6 +53,7 @@ jobs:
             -DCITRON_USE_BUNDLED_QT=ON ^
             -DENABLE_QT6=ON ^
             -DCITRON_TESTS=OFF
+            -DUSE_DISCORD_PRESENCE=ON
 
       - name: Build Citron
         working-directory: ./citron
