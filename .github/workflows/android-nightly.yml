@@ -1,4 +1,4 @@
-name: Build Citron (Android Nightly)
+name: Android Nightly Build
 
 on:
   workflow_dispatch:
@@ -42,13 +42,42 @@ jobs:
           yes | sdkmanager --licenses > /dev/null || true
           sdkmanager "platform-tools" "platforms;android-35" "build-tools;34.0.0"
 
+      - name: Install Android NDK
+        run: |
+          wget -q https://dl.google.com/android/repository/android-ndk-r26b-linux.zip
+          unzip -q android-ndk-r26b-linux.zip
+          echo "ANDROID_NDK_HOME=$PWD/android-ndk-r26b" >> $GITHUB_ENV
+
+      # --- STAGE 1 ---
+      - name: Configure CMake
+        run: |
+          cmake -B build-android -S citron_source \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-30 \
+            -DENABLE_QT=OFF \
+            -DENABLE_SDL2=OFF \
+            -DENABLE_WEB_SERVICE=OFF \
+            -DCITRON_USE_BUNDLED_VCPKG=ON \
+            -DCITRON_USE_BUNDLED_FFMPEG=ON \
+            -DANDROID_ARM_NEON=ON \
+            -DCITRON_ENABLE_LTO=ON
+
+      - name: Build with CMake
+        run: |
+          cmake --build build-android --config Release --parallel $(nproc)
+
+      # --- STAGE 2: ANDROID PACKAGING ---
       - name: Build APK with Gradle
         run: |
           cd citron_source/src/android
           
+          # The runner sets a default ANDROID_SDK_ROOT. We MUST override it.
+          # Forcing it to equal our correct ANDROID_HOME path prevents a conflict.
           export ANDROID_SDK_ROOT="$ANDROID_HOME"
           
-          # Now, execute the build in the harmonized environment.
+          # Execute the Gradle build, which will find the libraries built by CMake.
           ./gradlew assembleMainlineRelease
 
       - name: Upload APK artifact
