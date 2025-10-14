@@ -1,4 +1,4 @@
-name: Android Nightly Build and Release
+name: Build Citron (Android Nightly)
 
 on:
   workflow_dispatch:
