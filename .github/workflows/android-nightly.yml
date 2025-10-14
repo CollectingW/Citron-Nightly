@@ -29,15 +29,20 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq wget unzip curl git cmake build-essential pkg-config zip glslang-tools
 
-      - name: Install Android SDK
+      - name: Install Android SDK and Set Environment
         run: |
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
           unzip -q commandlinetools-linux-11076708_latest.zip
           mkdir -p android-sdk/cmdline-tools
           mv cmdline-tools android-sdk/cmdline-tools/latest
-          # --- THIS IS THE FIX ---
-          # Set the recommended ANDROID_HOME variable instead of ANDROID_SDK_ROOT
+          
+          # 1. Set the recommended ANDROID_HOME to our downloaded SDK.
           echo "ANDROID_HOME=$PWD/android-sdk" >> $GITHUB_ENV
+          
+          # 2. Explicitly unset the conflicting ANDROID_SDK_ROOT by setting it to an empty string.
+          echo "ANDROID_SDK_ROOT=" >> $GITHUB_ENV
+          
+          # 3. Add our SDK tools to the path.
           echo "$PWD/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
 
       - name: Accept Android SDK licenses and install components
