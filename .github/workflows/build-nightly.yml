@@ -48,6 +48,10 @@ jobs:
           persist-credentials: false
           submodules: 'recursive'
 
+      - name: Set Version
+        id: version
+        run: echo "APP_VERSION=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
       - name: Install dependencies
         run: chmod +x ./get-dependencies.sh && ./get-dependencies.sh
 
@@ -61,20 +65,13 @@ jobs:
       - name: Package AppImage
         run: |
           chmod +x ./package-citron.sh
-          ARCH_SUFFIX=${{ matrix.arch_suffix }} DEVEL=true ./package-citron.sh
+          APP_VERSION=${{ env.APP_VERSION }} ARCH_SUFFIX=${{ matrix.arch_suffix }} DEVEL=true ./package-citron.sh
 
-      - name: Upload AppImage
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: AppImage${{ matrix.arch_suffix }}
-          path: "dist/*.AppImage*"
-
-      - name: Upload version file
-        if: ${{ matrix.build_arg == '' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: version
-          path: "dist/version"
+          name: Artifacts${{ matrix.arch_suffix }}
+          path: dist/
 
   release:
     if: ${{ github.ref_name == 'main' }}
@@ -86,24 +83,18 @@ jobs:
       contents: write
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Set Version
+        run: echo "APP_VERSION=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
         with:
-          pattern: AppImage*
+          pattern: Artifacts*
           merge-multiple: true
           path: .
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: version
-          path: .
-
-      - name: Read version
-        run: |
-          export VERSION="$(cat version)"
-          echo "APP_VERSION=${VERSION}" >> "${GITHUB_ENV}"
-
       - name: Del Previous Release
-        run: gh release delete "nightly" --repo "${GITHUB_REPOSITORY}" --cleanup-tag -y && sleep 5
+        run: gh release delete "nightly-linux" --repo "${GITHUB_REPOSITORY}" --cleanup-tag -y && sleep 5
         env:
           GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
         continue-on-error: true
