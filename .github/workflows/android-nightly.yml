@@ -1,7 +1,6 @@
 name: Android Nightly Build
 
 on:
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
   # Runs at midnight UTC every day
   schedule:
@@ -13,10 +12,11 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Checkout repository
+      - name: Checkout your builder repository
         uses: actions/checkout@v4
-        with:
-          submodules: 'recursive'
+
+      - name: Clone Citron Source Code
+        run: git clone --recursive --depth 1 https://git.citron-emu.org/citron/emulator.git citron_source
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -51,8 +51,8 @@ jobs:
 
       - name: Configure CMake
         run: |
-          # Pointing CMake to the correct source directory: 'emulator'
-          cmake -B build-android -S emulator \
+          # Pointing CMake to the newly cloned 'citron_source' directory
+          cmake -B build-android -S citron_source \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
             -DANDROID_ABI=arm64-v8a \
@@ -71,13 +71,13 @@ jobs:
 
       - name: Build APK with Gradle
         run: |
-          # Using the correct path to the android project
-          cd emulator/src/android
+          # Using the correct path inside the 'citron_source' directory
+          cd citron_source/src/android
           ./gradlew assembleMainlineRelease
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: citron-android-nightly
-
-          path: emulator/src/android/app/build/outputs/apk/mainline/release/*.apk
+          
+          path: citron_source/src/android/app/build/outputs/apk/mainline/release/*.apk
