@@ -117,7 +117,7 @@ jobs:
       - name: Create new nightly release
         uses: softprops/action-gh-release@v2
         with:
-          name: "Continuous Build: Android Nightly: (${{ env.GIT_HASH }})"
+          name: "Continuous Build: (Android Nightly: ${{ env.GIT_HASH }})"
           tag_name: "nightly-android"
           prerelease: true
           files: "*.apk"
