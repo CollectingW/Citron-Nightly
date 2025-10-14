@@ -2,10 +2,16 @@
 set -ex
 ARCH="${ARCH:-$(uname -m)}"
 
+# The VERSION is now passed as an environment variable from the workflow
+if [ -z "$APP_VERSION" ]; then
+    echo "Error: APP_VERSION environment variable is not set."
+    exit 1
+fi
+
 # Construct unique names for the AppImage and tarball based on the build matrix.
-OUTNAME_BASE="citron_nightly-${ARCH}"
-export OUTNAME_APPIMAGE="${OUTNAME_BASE}${ARCH_SUFFIX}.AppImage"
-export OUTNAME_TAR="${OUTNAME_BASE}${ARCH_SUFFIX}.tar.zst"
+OUTNAME_BASE="citron_nightly-${APP_VERSION}-linux-${ARCH}${ARCH_SUFFIX}"
+export OUTNAME_APPIMAGE="${OUTNAME_BASE}.AppImage"
+export OUTNAME_TAR="${OUTNAME_BASE}.tar.zst"
 
 URUNTIME="https://raw.githubusercontent.com/pkgforge-dev/Anylinux-AppImages/refs/heads/main/useful-tools/uruntime2appimage.sh"
 SHARUN="https://raw.githubusercontent.com/pkgforge-dev/Anylinux-AppImages/refs/heads/main/useful-tools/quick-sharun.sh"
@@ -46,11 +52,6 @@ chmod +x ./uruntime2appimage
 ./uruntime2appimage --outname "$OUTNAME_APPIMAGE"
 
 mkdir -p ./dist
-# Move both the AppImage and the tar.zst to the dist folder
+
 mv -v ./*.AppImage* ./dist
 mv -v ./*.tar.zst ./dist
-
-# Check for the version file and move it to the dist folder if it exists.
-if [ -f ~/version ]; then
-  mv -v ~/version ./dist
-fi
