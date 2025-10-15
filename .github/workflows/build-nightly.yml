@@ -11,23 +11,35 @@ on:
 jobs:
   build:
     name: "${{ matrix.name }}"
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }} # Use matrix to select the runner
     timeout-minutes: 120
     strategy:
+      fail-fast: false # Allows all matrix jobs to complete
       matrix:
         include:
+          # --- x86_64 Builds ---
           - name: "Citron Build (Normal x86_64)"
+            os: ubuntu-latest
             arch_suffix: ""
             build_arg: ""
           - name: "Citron Build (Optimized x86_64)"
+            os: ubuntu-latest
             arch_suffix: "_v3"
             build_arg: "v3"
           - name: "Citron Build (Normal PGO x86_64)"
+            os: ubuntu-latest
             arch_suffix: "_pgo"
             build_arg: "pgo"
           - name: "Citron Build (Optimized PGO x86_64)"
+            os: ubuntu-latest
             arch_suffix: "_v3_pgo"
             build_arg: "v3-pgo"
+            
+          # --- aarch64 (ARM64) Build ---
+          - name: "Citron Build (Normal aarch64)"
+            os: ubuntu-latest-arm64 
+            arch_suffix: "_aarch64"
+            build_arg: ""
 
     container: ghcr.io/pkgforge-dev/archlinux:latest
 
@@ -47,7 +59,6 @@ jobs:
           mv build-citron.sh emulator/
           mv package-citron.sh emulator/
 
-      # All subsequent steps now run from within the "emulator" directory.
       - name: Add Git Safe Directory
         working-directory: ./emulator
         run: git config --global --add safe.directory "$PWD"
