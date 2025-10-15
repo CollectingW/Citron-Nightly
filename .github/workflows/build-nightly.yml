@@ -43,9 +43,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pacman-
 
-      - uses: actions/checkout@v4
+      # <<< FIX: Checkout the repository using its full URL
+      - name: Checkout Upstream Repository
+        uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          repository: 'https://git.citron-emu.org/citron/emulator'
           submodules: 'recursive'
 
       - name: Add Git Safe Directory
@@ -91,9 +93,14 @@ jobs:
       contents: write
     runs-on: ubuntu-latest
     steps:
+    
+      - name: Checkout Upstream Repository
+        uses: actions/checkout@v4
+        with:
+          repository: 'https://git.citron-emu.org/citron/emulator'
 
       - name: Set Version
-        id: version # Add an ID to this step
+        id: version
         run: echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Download all artifacts
