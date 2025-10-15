@@ -33,7 +33,7 @@ jobs:
 
       - name: Get Nightly Version
         id: version
-        working-directory: ./citron 
+        working-directory: ./citron
         shell: bash
         run: |
           git fetch --tags
@@ -41,15 +41,15 @@ jobs:
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Patch Root CMakeLists to find OpenSSL Path
-        working-directory: ./citron 
+        working-directory: ./citron
         shell: pwsh
         run: |
           $find_openssl_block = 'find_package(OpenSSL 1.1.1 REQUIRED)'
           $diagnostic_block = @"
           if(OPENSSL_FOUND)
               message(STATUS "OpenSSL Found by CMake!")
-              message(STATUS "  => SSL Library: ${OPENSSL_SSL_LIBRARY}")
-              get_filename_component(OPENSSL_LIB_DIR ${OPENSSL_SSL_LIBRARY} DIRECTORY)
+              message(STATUS "  => Crypto Library: ${OPENSSL_CRYPTO_LIBRARY}")
+              get_filename_component(OPENSSL_LIB_DIR ${OPENSSL_CRYPTO_LIBRARY} DIRECTORY)
               get_filename_component(OPENSSL_INSTALL_DIR ${OPENSSL_LIB_DIR} DIRECTORY)
               set(OPENSSL_BIN_DIR "${OPENSSL_INSTALL_DIR}/bin")
               message(STATUS "  => Inferred DLL Directory: ${OPENSSL_BIN_DIR}")
@@ -59,22 +59,22 @@ jobs:
           echo "Patched root CMakeLists.txt to add OpenSSL diagnostics."
 
       - name: Patch CMakeLists to copy OpenSSL DLLs
-        working-directory: ./citron 
+        working-directory: ./citron
         shell: pwsh
         run: |
           $cmake_patch = @"
 
           # --- Start of dynamically added patch for OpenSSL DLLs ---
           if(ENABLE_OPENSSL AND OPENSSL_FOUND AND WIN32)
-              message(STATUS "Adding post-build command to copy OpenSSL DLLs for target citron.")
+              message(STATUS "Adding post-build command to copy OpenSSL 3.x DLLs for target citron.")
               add_custom_command(
                   TARGET citron
                   POST_BUILD
                   COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                          "${OPENSSL_BIN_DIR}/libcrypto-1_1-x64.dll"
+                          "${OPENSSL_BIN_DIR}/libcrypto-3-x64.dll"
                           "$<TARGET_FILE_DIR:citron>"
                   COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                          "${OPENSSL_BIN_DIR}/libssl-1_1-x64.dll"
+                          "${OPENSSL_BIN_DIR}/libssl-3-x64.dll"
                           "$<TARGET_FILE_DIR:citron>"
                   COMMENT "Copying OpenSSL runtime DLLs to output directory..."
               )
@@ -85,7 +85,7 @@ jobs:
           echo "Appended OpenSSL DLL copy command to src/CMakeLists.txt"
 
       - name: Configure CMake
-        working-directory: ./citron 
+        working-directory: ./citron
         shell: cmd
         run: |
           cmake -B build -S . -G "Visual Studio 17 2022" -A x64 ^
@@ -98,7 +98,7 @@ jobs:
             -DENABLE_OPENSSL=ON
 
       - name: Build Citron
-        working-directory: ./citron 
+        working-directory: ./citron
         shell: cmd
         run: cmake --build build --config Release --parallel
 
