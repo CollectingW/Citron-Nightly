@@ -3,13 +3,13 @@
 [![GitHub Downloads](https://img.shields.io/github/downloads/pkgforge-dev/Citron-AppImage/total?logo=github&label=GitHub%20Downloads)](https://github.com/pkgforge-dev/Citron-AppImage/releases/latest)
 [![CI Build Status](https://github.com//pkgforge-dev/Citron-AppImage/actions/workflows/build-stable.yml/badge.svg)](https://github.com/pkgforge-dev/Citron-AppImage/releases/latest)
 
-This repository makes Nightly builds for **x86_64** (generic) and **x86_64_v3** on Linux, and also Windows & Android builds! If your CPU is less than 10 years old, for Linux, use the x86_64_v3 build since it has a significant performance boost.
+This repository makes Nightly builds for **x86_64** (generic) and **x86_64_v3** on Linux, and also Windows & Android builds! If your CPU is less than 10 years old, for Linux, use the x86_64_v3 build since it has a significant performance boost. These builds are all produced @ 12 AM PST every single day.
 
-* [Latest Android Nightly Release / Runs @ 9 EST Everyday](https://github.com/CollectingW/Citron-Nightly/releases/tag/nightly-android)
+* [Latest Android Nightly Release](https://github.com/CollectingW/Citron-Nightly/releases/tag/nightly-android)
 
-* [Latest Linux Nightly Release / Runs @ 10 EST Everyday](https://github.com/CollectingW/Citron-Nightly/releases/tag/nightly-linux)
+* [Latest Linux Nightly Release](https://github.com/CollectingW/Citron-Nightly/releases/tag/nightly-linux)
 
-* [Latest Windows Nightly Release / Runs @ 11 EST Everyday](https://github.com/CollectingW/Citron-AppImage/releases/tag/nightly-windows)
+* [Latest Windows Nightly Release](https://github.com/CollectingW/Citron-AppImage/releases/tag/nightly-windows)
 
 # READ THIS IF YOU HAVE ISSUES
 
