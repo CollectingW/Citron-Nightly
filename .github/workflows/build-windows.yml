@@ -8,7 +8,7 @@ on:
     - cron: "0 12 * * *"
   workflow_dispatch: {}
 
-jobs S
+jobs:
   build:
     name: "Citron Build (Windows)"
     runs-on: windows-latest
