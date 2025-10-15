@@ -8,8 +8,8 @@ on:
     - cron: "0 12 * * *"
   workflow_dispatch: {}
 
-jobs: 
-  build: 
+jobs:
+  build:
     name: "${{ matrix.name }}"
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -91,8 +91,10 @@ jobs:
       contents: write
     runs-on: ubuntu-latest
     steps:
+
       - name: Set Version
-        run: echo "APP_VERSION=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+        id: version # Add an ID to this step
+        run: echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -109,7 +111,7 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
-          name: "Continuous Build (Linux Nightly: ${{ env.APP_VERSION }})"
+          name: "Continuous Build (Linux Nightly: ${{ steps.version.outputs.sha }})"
           tag_name: "nightly-linux"
           prerelease: true
           draft: false
