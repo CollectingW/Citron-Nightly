@@ -48,11 +48,6 @@ jobs:
           persist-credentials: false
           submodules: 'recursive'
 
-      # STEP 1: Get the git hash. This step is reliable.
-      - name: Set Version
-        id: version
-        run: echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-
       - name: Install dependencies
         run: chmod +x ./get-dependencies.sh && ./get-dependencies.sh
 
@@ -63,28 +58,28 @@ jobs:
           chmod +x ./build-citron.sh
           JOBS=${JOBS_VAL} DEVEL=true ./build-citron.sh ${{ matrix.build_arg }}
 
-      # STEP 2: Package using a fixed, temporary name. This makes the output predictable.
-      - name: Package with Temporary Name
+      - name: Package and Name Artifacts
         run: |
+          # Part 1: Run the package script with a fixed temporary name
+          echo "--- Packaging with temporary name ---"
           chmod +x ./package-citron.sh
-          # We give the script DUMMY variables to force a predictable output file name.
           APP_VERSION="temp" ARCH_SUFFIX="" DEVEL=true ./package-citron.sh
 
-      # STEP 3: Rename the temporary files to their final, correct names.
-      - name: Rename Artifacts
-        run: |
-          # Construct the final name using the git hash and matrix suffix.
-          FINAL_NAME="citron_nightly-${{ steps.version.outputs.sha }}-linux-x86_64${{ matrix.arch_suffix }}"
+          # Part 2: Get the version hash inside this same step
+          GIT_SHA=$(git rev-parse --short HEAD)
+          echo "Git SHA for renaming is: [${GIT_SHA}]"
+
+          # Part 3: Construct the final name and rename the files
+          FINAL_NAME="citron_nightly-${GIT_SHA}-linux-x86_64${{ matrix.arch_suffix }}"
           echo "Final artifact base name will be: ${FINAL_NAME}"
-          
-          # Find the temp files in the dist directory and rename them.
-          mv ./dist/citron_nightly-temp-linux-x86_64.AppImage "./dist/${FINAL_NAME}.AppImage"
-          mv ./dist/citron_nightly-temp-linux-x86_64.tar.zst "./dist/${FINAL_NAME}.tar.zst"
-          
-          echo "Renamed files:"
+
+          # Move the predictable temp files to their final, unique names
+          mv -v ./dist/citron_nightly-temp-linux-x86_64.AppImage "./dist/${FINAL_NAME}.AppImage"
+          mv -v ./dist/citron_nightly-temp-linux-x86_64.tar.zst "./dist/${FINAL_NAME}.tar.zst"
+
+          echo "--- Final files in dist/ directory ---"
           ls -l ./dist
 
-      # STEP 4: Upload the correctly named artifacts for the release job.
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
