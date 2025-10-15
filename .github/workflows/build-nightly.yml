@@ -5,7 +5,7 @@ concurrency:
 
 on:
   schedule:
-    - cron: "0 12 * * *"
+    - cron: "0 7 * * *"
   workflow_dispatch: {}
 
 jobs:
@@ -43,12 +43,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pacman-
 
-      # <<< FIX: Checkout the repository using its full URL
       - name: Checkout Upstream Repository
-        uses: actions/checkout@v4
-        with:
-          repository: 'https://git.citron-emu.org/citron/emulator'
-          submodules: 'recursive'
+        run: git clone --recurse-submodules https://git.citron-emu.org/citron/emulator.git .
 
       - name: Add Git Safe Directory
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -95,9 +91,7 @@ jobs:
     steps:
     
       - name: Checkout Upstream Repository
-        uses: actions/checkout@v4
-        with:
-          repository: 'https://git.citron-emu.org/citron/emulator'
+        run: git clone https://git.citron-emu.org/citron/emulator.git .
 
       - name: Set Version
         id: version
