@@ -51,9 +51,12 @@ chmod +x ./uruntime2appimage
 
 ./uruntime2appimage
 
-echo "Renaming generic AppImage to ${OUTNAME_APPIMAGE}..."
-mv -v ./citron_nightly-x86_64.AppImage "${OUTNAME_APPIMAGE}"
-mv -v ./citron_nightly-x86_64.AppImage.zsync "${OUTNAME_APPIMAGE}.zsync"
+echo "Renaming versioned AppImage to the final suffixed name: ${OUTNAME_APPIMAGE}..."
+
+SOURCE_APPIMAGE="citron_nightly-${APP_VERSION}-x86_64.AppImage"
+
+mv -v "${SOURCE_APPIMAGE}" "${OUTNAME_APPIMAGE}"
+mv -v "${SOURCE_APPIMAGE}.zsync" "${OUTNAME_APPIMAGE}.zsync"
 
 mkdir -p ./dist
 
