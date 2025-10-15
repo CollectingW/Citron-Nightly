@@ -34,12 +34,6 @@ jobs:
             os: ubuntu-latest
             arch_suffix: "_v3_pgo"
             build_arg: "v3-pgo"
-            
-          # --- aarch64 (ARM64) Build ---
-          - name: "Citron Build (Normal aarch64)"
-            os: ubuntu-latest-arm64 
-            arch_suffix: "_aarch64"
-            build_arg: ""
 
     container: ghcr.io/pkgforge-dev/archlinux:latest
 
