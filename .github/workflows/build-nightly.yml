@@ -8,8 +8,7 @@ on:
     - cron: "0 12 * * *"
   workflow_dispatch: {}
 
-jobs:
-  build:
+jobs build:
     name: "${{ matrix.name }}"
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -48,44 +47,42 @@ jobs:
           persist-credentials: false
           submodules: 'recursive'
 
+      - name: Add Git Safe Directory
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
       - name: Install dependencies
         run: chmod +x ./get-dependencies.sh && ./get-dependencies.sh
 
       - name: Build Citron from source
         run: |
           NPROC_VAL=$(nproc --all)
-          JOBS_VAL=$((NPROC_VAL > 4 ? 4 : NPROC_VAL))
+          JOPS_VAL=$((NPROC_VAL > 4 ? 4 : NPROC_VAL))
           chmod +x ./build-citron.sh
           JOBS=${JOBS_VAL} DEVEL=true ./build-citron.sh ${{ matrix.build_arg }}
 
-      - name: Package and Name Artifacts
+      - name: Package AppImage with Correct Name
         run: |
-          # Part 1: Run the package script with a fixed temporary name
-          echo "--- Packaging with temporary name ---"
-          chmod +x ./package-citron.sh
-          APP_VERSION="temp" ARCH_SUFFIX="" DEVEL=true ./package-citron.sh
-
-          # Part 2: Get the version hash inside this same step
+          # Get the git hash into a variable within this step's shell
           GIT_SHA=$(git rev-parse --short HEAD)
-          echo "Git SHA for renaming is: [${GIT_SHA}]"
-
-          # Part 3: Construct the final name and rename the files
-          FINAL_NAME="citron_nightly-${GIT_SHA}-linux-x86_64${{ matrix.arch_suffix }}"
-          echo "Final artifact base name will be: ${FINAL_NAME}"
-
-          # Move the predictable temp files to their final, unique names
-          mv -v ./dist/citron_nightly-temp-linux-x86_64.AppImage "./dist/${FINAL_NAME}.AppImage"
-          mv -v ./dist/citron_nightly-temp-linux-x86_64.tar.zst "./dist/${FINAL_NAME}.tar.zst"
-
-          echo "--- Final files in dist/ directory ---"
-          ls -l ./dist
+          
+          # Export all the variables that the packaging script and its tools need
+          export APP_VERSION="${GIT_SHA}"                # For your script's filename logic
+          export VERSION="${GIT_SHA}"                    # For the AppImage's internal metadata (fixes the warning)
+          export ARCH_SUFFIX="${{ matrix.arch_suffix }}"  # For the unique filename suffix
+          export DEVEL="true"
+          
+          echo "--- Starting package with APP_VERSION=${APP_VERSION} and ARCH_SUFFIX=${ARCH_SUFFIX} ---"
+          
+          # Run the script, which will now have access to all the correct variables
+          chmod +x ./package-citron.sh
+          ./package-citron.sh
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: Artifacts${{ matrix.arch_suffix }}
           path: dist/
-
+  
   release:
     if: ${{ github.ref_name == 'main' }}
     name: "release"
