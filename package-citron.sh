@@ -48,8 +48,12 @@ echo "Successfully created $OUTNAME_TAR"
 
 wget --retry-connrefused --tries=30 "$URUNTIME" -O ./uruntime2appimage
 chmod +x ./uruntime2appimage
-# Use the correct variable for the AppImage output name
-./uruntime2appimage --outname "$OUTNAME_APPIMAGE"
+
+./uruntime2appimage
+
+echo "Renaming generic AppImage to ${OUTNAME_APPIMAGE}..."
+mv -v ./citron_nightly-x86_64.AppImage "${OUTNAME_APPIMAGE}"
+mv -v ./citron_nightly-x86_64.AppImage.zsync "${OUTNAME_APPIMAGE}.zsync"
 
 mkdir -p ./dist
 
