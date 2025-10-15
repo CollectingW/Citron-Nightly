@@ -5,7 +5,7 @@ concurrency:
 
 on:
   schedule:
-    - cron: "0 7 * * *"
+    - cron: "0 12 * * *"
   workflow_dispatch: {}
 
 jobs:
@@ -35,24 +35,29 @@ jobs:
       - name: Install Git
         run: pacman -Syu --noconfirm --needed git
 
-      - name: Cache Pacman packages
-        uses: actions/cache@v4
-        with:
-          path: /var/cache/pacman/pkg
-          key: ${{ runner.os }}-pacman-${{ hashFiles('**/get-dependencies.sh') }}
-          restore-keys: |
-            ${{ runner.os }}-pacman-
+      - name: Checkout Workflow Scripts
+        uses: actions/checkout@v4
 
-      - name: Checkout Upstream Repository
-        run: git clone --recurse-submodules https://git.citron-emu.org/citron/emulator.git .
+      - name: Checkout Upstream Source Code
+        run: git clone --recurse-submodules https://git.citron-emu.org/citron/emulator.git emulator
 
+      - name: Prepare Build Environment
+        run: |
+          mv get-dependencies.sh emulator/
+          mv build-citron.sh emulator/
+          mv package-citron.sh emulator/
+
+      # All subsequent steps now run from within the "emulator" directory.
       - name: Add Git Safe Directory
-        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+        working-directory: ./emulator
+        run: git config --global --add safe.directory "$PWD"
 
       - name: Install dependencies
+        working-directory: ./emulator
         run: chmod +x ./get-dependencies.sh && ./get-dependencies.sh
 
       - name: Build Citron from source
+        working-directory: ./emulator
         run: |
           NPROC_VAL=$(nproc --all)
           JOBS_VAL=$((NPROC_VAL > 4 ? 4 : NPROC_VAL))
@@ -60,6 +65,7 @@ jobs:
           JOBS=${JOBS_VAL} DEVEL=true ./build-citron.sh ${{ matrix.build_arg }}
 
       - name: Package AppImage with Correct Name
+        working-directory: ./emulator
         run: |
           GIT_SHA=$(git rev-parse --short HEAD)
           
@@ -68,8 +74,6 @@ jobs:
           export ARCH_SUFFIX="${{ matrix.arch_suffix }}"
           export DEVEL="true"
           
-          echo "--- Starting package with APP_VERSION=${APP_VERSION} and ARCH_SUFFIX=${ARCH_SUFFIX} ---"
-          
           chmod +x ./package-citron.sh
           ./package-citron.sh
 
@@ -77,8 +81,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Artifacts${{ matrix.arch_suffix }}
-          path: dist/
-  
+          path: emulator/dist/ 
+
   release:
     if: ${{ github.ref_name == 'main' }}
     name: "release"
@@ -89,7 +93,6 @@ jobs:
       contents: write
     runs-on: ubuntu-latest
     steps:
-    
       - name: Checkout Upstream Repository
         run: git clone https://git.citron-emu.org/citron/emulator.git .
 
