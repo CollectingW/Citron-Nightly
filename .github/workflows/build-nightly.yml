@@ -8,7 +8,8 @@ on:
     - cron: "0 12 * * *"
   workflow_dispatch: {}
 
-jobs build:
+jobs: 
+  build: 
     name: "${{ matrix.name }}"
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -56,24 +57,21 @@ jobs build:
       - name: Build Citron from source
         run: |
           NPROC_VAL=$(nproc --all)
-          JOPS_VAL=$((NPROC_VAL > 4 ? 4 : NPROC_VAL))
+          JOBS_VAL=$((NPROC_VAL > 4 ? 4 : NPROC_VAL))
           chmod +x ./build-citron.sh
           JOBS=${JOBS_VAL} DEVEL=true ./build-citron.sh ${{ matrix.build_arg }}
 
       - name: Package AppImage with Correct Name
         run: |
-          # Get the git hash into a variable within this step's shell
           GIT_SHA=$(git rev-parse --short HEAD)
           
-          # Export all the variables that the packaging script and its tools need
-          export APP_VERSION="${GIT_SHA}"                # For your script's filename logic
-          export VERSION="${GIT_SHA}"                    # For the AppImage's internal metadata (fixes the warning)
-          export ARCH_SUFFIX="${{ matrix.arch_suffix }}"  # For the unique filename suffix
+          export APP_VERSION="${GIT_SHA}"
+          export VERSION="${GIT_SHA}"
+          export ARCH_SUFFIX="${{ matrix.arch_suffix }}"
           export DEVEL="true"
           
           echo "--- Starting package with APP_VERSION=${APP_VERSION} and ARCH_SUFFIX=${ARCH_SUFFIX} ---"
           
-          # Run the script, which will now have access to all the correct variables
           chmod +x ./package-citron.sh
           ./package-citron.sh
 
