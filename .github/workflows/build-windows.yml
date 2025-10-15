@@ -1,4 +1,4 @@
-name: Build Citron (Windows Nightly)
+name: Build Citron (Windows)
 concurrency:
   group: build-windows-nightly-${{ github.ref }}
   cancel-in-progress: true
