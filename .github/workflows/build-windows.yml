@@ -8,17 +8,16 @@ on:
     - cron: "0 12 * * *"
   workflow_dispatch: {}
 
-jobs:
+jobs S
   build:
     name: "Citron Build (Windows)"
     runs-on: windows-latest
     timeout-minutes: 120
 
     steps:
-      - name: Checkout Citron Source with Submodules
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          submodules: 'recursive'
+          persist-credentials: false
 
       - name: Install Vulkan SDK
         shell: pwsh
@@ -28,16 +27,21 @@ jobs:
           Start-Process -FilePath ".\VulkanSDK-Installer.exe" -ArgumentList "--accept-licenses", "--default-answer", "--confirm-command", "install" -Wait
           echo "C:\VulkanSDK\1.3.283.0\Bin" | Out-File -FilePath $env:GITHUB_PATH -Append
 
+      - name: Clone Citron Source
+        shell: bash
+        run: git clone --recursive "https://git.citron-emu.org/citron/emulator.git" citron
+
       - name: Get Nightly Version
         id: version
+        working-directory: ./citron 
         shell: bash
         run: |
           git fetch --tags
           VERSION=$(git rev-parse --short HEAD)
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
 
-      # --- NEW STEP 1: Patch root CMakeLists.txt for diagnostics ---
       - name: Patch Root CMakeLists to find OpenSSL Path
+        working-directory: ./citron 
         shell: pwsh
         run: |
           $find_openssl_block = 'find_package(OpenSSL 1.1.1 REQUIRED)'
@@ -54,8 +58,8 @@ jobs:
           (Get-Content -Path "CMakeLists.txt" -Raw) -replace [regex]::Escape($find_openssl_block), "`$0`n${diagnostic_block}" | Set-Content -Path "CMakeLists.txt"
           echo "Patched root CMakeLists.txt to add OpenSSL diagnostics."
 
-      # --- NEW STEP 2: Patch src/CMakeLists.txt to copy DLLs ---
       - name: Patch CMakeLists to copy OpenSSL DLLs
+        working-directory: ./citron 
         shell: pwsh
         run: |
           $cmake_patch = @"
@@ -81,6 +85,7 @@ jobs:
           echo "Appended OpenSSL DLL copy command to src/CMakeLists.txt"
 
       - name: Configure CMake
+        working-directory: ./citron 
         shell: cmd
         run: |
           cmake -B build -S . -G "Visual Studio 17 2022" -A x64 ^
@@ -93,6 +98,7 @@ jobs:
             -DENABLE_OPENSSL=ON
 
       - name: Build Citron
+        working-directory: ./citron 
         shell: cmd
         run: cmake --build build --config Release --parallel
 
@@ -101,7 +107,7 @@ jobs:
         run: |
           mkdir dist
           echo "Creating final zip archive..."
-          Compress-Archive -Path ".\build\bin\Release\*" -DestinationPath ".\dist\Citron-windows-nightly-${{ steps.version.outputs.VERSION }}.zip"
+          Compress-Archive -Path ".\citron\build\bin\Release\*" -DestinationPath ".\dist\Citron-windows-nightly-${{ steps.version.outputs.VERSION }}.zip"
 
       - name: Upload Windows Build
         uses: actions/upload-artifact@v4
@@ -109,7 +115,6 @@ jobs:
           name: Citron-Windows-Nightly
           path: "dist/*.zip"
 
-  # The release job remains unchanged
   release:
     if: ${{ github.ref_name == 'main' }}
     name: "Release"
