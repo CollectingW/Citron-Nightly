@@ -3,7 +3,7 @@ name: Build Citron (Android Nightly)
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 9 * * *"
+    - cron: "0 12 * * *"
 
 jobs:
   build-android:
