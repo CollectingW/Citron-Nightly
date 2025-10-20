@@ -1,4 +1,4 @@
-name: Build Citron (Nightly)
+name: Build Citron (Linux)
 concurrency:
   group: build-nightly-${{ github.ref }}
   cancel-in-progress: true
