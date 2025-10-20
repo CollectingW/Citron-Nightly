@@ -1,0 +1,203 @@
+name: Build Citron (Android)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 12 * * *"
+
+jobs:
+  check-version:
+    name: Check if new version available
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.compare.outputs.should_build }}
+      new_hash: ${{ steps.upstream.outputs.hash }}
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+
+      - name: Get upstream commit hash
+        id: upstream
+        run: |
+          HASH=$(git ls-remote https://git.citron-emu.org/citron/emulator.git HEAD | cut -f1 | cut -c1-7)
+          echo "hash=$HASH" >> $GITHUB_OUTPUT
+          echo "Upstream hash: $HASH"
+
+      - name: Get last built version
+        id: last_built
+        run: |
+          LAST_HASH=$(cat LATEST_VERSION | tr -d '\n' || echo "none")
+          echo "last_hash=$LAST_HASH" >> $GITHUB_OUTPUT
+          echo "Last built hash: $LAST_HASH"
+
+      - name: Check if release exists
+        id: release_check
+        run: |
+          if gh release view nightly-android --repo "${{ github.repository }}" > /dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Release exists"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Release does not exist"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      - name: Compare versions
+        id: compare
+        run: |
+          if [ "${{ steps.upstream.outputs.hash }}" != "${{ steps.last_built.outputs.last_hash }}" ]; then
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "✅ New version detected - will build"
+          elif [ "${{ steps.release_check.outputs.exists }}" != "true" ]; then
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "✅ No release exists - will build"
+          else
+            echo "should_build=false" >> $GITHUB_OUTPUT
+            echo "⏭️ No changes - skipping build"
+          fi
+
+  build-android:
+    name: Build Android APK
+    needs: [check-version]
+    if: needs.check-version.outputs.should_build == 'true'
+    runs-on: ubuntu-24.04
+    outputs:
+      git_hash: ${{ steps.get_hash.outputs.git_hash }}
+
+    steps:
+      - name: Clone Citron Source Code
+        run: git clone --recursive --depth 1 https://git.citron-emu.org/citron/emulator.git citron_source
+
+      - name: Clean and Force-Update Submodules
+        working-directory: ./citron_source
+        run: |
+          git submodule deinit --all --force
+          git submodule update --init --recursive --force
+
+      - name: Get Citron Commit Hash
+        id: get_hash
+        working-directory: ./citron_source
+        run: echo "git_hash=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq wget unzip curl git cmake build-essential pkg-config zip glslang-tools
+
+      - name: Install Android SDK
+        run: |
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -q commandlinetools-linux-11076708_latest.zip
+          mkdir -p android-sdk/cmdline-tools
+          mv cmdline-tools android-sdk/cmdline-tools/latest
+          echo "ANDROID_HOME=$PWD/android-sdk" >> $GITHUB_ENV
+          echo "$PWD/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+
+      - name: Accept Android SDK licenses and install components
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Install Android NDK
+        run: |
+          wget -q https://dl.google.com/android/repository/android-ndk-r26b-linux.zip
+          unzip -q android-ndk-r26b-linux.zip
+          echo "ANDROID_NDK_HOME=$PWD/android-ndk-r26b" >> $GITHUB_ENV
+
+      - name: Configure CMake
+        run: |
+          cmake -B build-android -S citron_source \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-30 \
+            -DENABLE_QT=OFF \
+            -DENABLE_SDL2=OFF \
+            -DENABLE_WEB_SERVICE=OFF \
+            -DCITRON_USE_BUNDLED_VCPKG=ON \
+            -DCITRON_USE_BUNDLED_FFMPEG=ON \
+            -DANDROID_ARM_NEON=ON \
+            -DCITRON_ENABLE_LTO=ON
+
+      - name: Build with CMake
+        run: |
+          cmake --build build-android --config Release --parallel $(nproc)
+
+      - name: Build APK with Gradle
+        run: |
+          cd citron_source/src/android
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          ./gradlew assembleMainlineRelease
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: citron-android-nightly
+          path: citron_source/src/android/app/build/outputs/apk/mainline/release/*.apk
+
+  release-android:
+    name: "Release Android Nightly"
+    needs: [check-version, build-android]
+    if: needs.check-version.outputs.should_build == 'true'
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download APK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: citron-android-nightly
+          path: .
+
+      - name: Get version info for release name
+        shell: bash
+        run: |
+          echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+          echo "GIT_HASH=${{ needs.build-android.outputs.git_hash }}" >> $GITHUB_ENV
+          
+      - name: Delete previous nightly release and tag
+        run: gh release delete "nightly-android" --repo "${{ github.repository }}" --cleanup-tag -y || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create new nightly release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Continuous Build: (Android Nightly: ${{ env.GIT_HASH }})"
+          tag_name: "nightly-android"
+          prerelease: true
+          files: "*.apk"
+          body: |
+            **Citron Upstream Commit:** [`${{ needs.check-version.outputs.new_hash }}`](https://git.citron-emu.org/citron/emulator/-/commit/${{ needs.check-version.outputs.new_hash }})
+            
+            This build is based on the latest Citron emulator source code from the upstream repository.
+            
+            **Build Details:**
+            - Platform: Android (arm64-v8a)
+            - Build Type: Release with LTO enabled
+            - Date: ${{ env.DATE }}
+
+      - name: Update LATEST_VERSION
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          echo "${{ env.GIT_HASH }}" > LATEST_VERSION
+          git add LATEST_VERSION
+          git commit -m "Update LATEST_VERSION to ${{ env.GIT_HASH }} [skip ci]" || exit 0
+          # Pull with rebase and retry push to handle concurrent updates
+          for i in {1..5}; do
+            git pull --rebase origin main && git push && break || sleep 2
+          done
