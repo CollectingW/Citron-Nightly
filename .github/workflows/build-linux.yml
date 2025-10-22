@@ -82,7 +82,7 @@ jobs:
 
       - uses: softprops/action-gh-release@v2.2.2
         with:
-          name: "Continuous Build (Nightly Version: ${{ env.VERSION }})"
+          name: "Continuous Build (Linux Version: ${{ env.VERSION }})"
           tag_name: "nightly-linux"
           prerelease: true
           draft: false
